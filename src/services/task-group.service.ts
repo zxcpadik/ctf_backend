@@ -39,7 +39,7 @@ class TaskGroupService {
   /**
    * Get all task groups with their tasks
    */
-  static async getAllTaskGroups(includeTasks: boolean = true, isGameActive: boolean = false, isAdmin: boolean = false): Promise<TaskGroup[]> {
+  static async get_all_task_groups(includeTasks: boolean = true, isGameActive: boolean = false, isAdmin: boolean = false): Promise<TaskGroup[]> {
     try {
       if (!isAdmin && !isGameActive) {
         return [];

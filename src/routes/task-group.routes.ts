@@ -5,7 +5,7 @@ import AuthMiddleware from '../middleware/auth.middleware';
 const router: Router = Router();
 
 // Task Group Management
-router.get('/', AuthMiddleware.authenticate, TaskGroupController.getAllTaskGroups);
+router.get('/', AuthMiddleware.authenticate, TaskGroupController.get_all_task_groups);
 router.post('/', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, TaskGroupController.createTaskGroup);
 router.get('/:groupId', AuthMiddleware.authenticate, TaskGroupController.getTaskGroupById);
 router.put('/:groupId', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, TaskGroupController.updateTaskGroup);

@@ -5,7 +5,7 @@ import { User } from '../entities/User';
 import { GameStatus } from '../entities/Game';
 import GameService from './game.service'; // To check game status
 import ValidationUtil from '../utils/validation.util';
-import { Equal } from 'typeorm'; // For more precise queries
+import EventEmitterService from './event-emitter.service';
 
 /**
  * Service for handling flag submissions, verification, and score updates.
@@ -126,8 +126,11 @@ class SubmissionService {
           team.score += task.score;
           await teamRepository.save(team);
         }
+
+        EventEmitterService.emitSubmissionResult(submission, true);
         return { isCorrect: true, message: "Correct flag! Points awarded." };
       } else {
+        EventEmitterService.emitSubmissionResult(submission, false);
         return { isCorrect: false, message: "Incorrect flag." };
       }
     } catch (error) {

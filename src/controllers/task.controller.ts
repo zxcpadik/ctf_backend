@@ -17,7 +17,7 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ storage });
+const upload = multer({ storage, limits: { files: 100 } });
 
 class TaskController {
   static async getAllTasks(req: Request, res: Response): Promise<void> {
@@ -52,6 +52,15 @@ class TaskController {
       const { taskId } = req.params;
       const isAdmin = req.isAdmin || false;
       const isGameActive = await GameService.isGameActive();
+
+      if (typeof taskId != 'string') {
+        const response: ResponseInterface = {
+          success: false,
+          message: "Bad request"
+        };
+        res.status(400).json(response);
+        return;
+      }
 
       const task = await TaskService.getTask(taskId, isAdmin, isGameActive);
 
@@ -156,6 +165,15 @@ class TaskController {
           const newFiles = req.files as Express.Multer.File[];
           const filesToDeleteArray = filesToDelete ? JSON.parse(filesToDelete) : [];
 
+          if (typeof taskId != 'string') {
+            const response: ResponseInterface = {
+              success: false,
+              message: "Bad request"
+            };
+            res.status(400).json(response);
+            return;
+          }
+
           const task = await TaskService.updateTask(
             taskId,
             {
@@ -204,6 +222,15 @@ class TaskController {
     try {
       const { taskId } = req.params;
 
+      if (typeof taskId != 'string') {
+        const response: ResponseInterface = {
+          success: false,
+          message: "Bad request"
+        };
+        res.status(400).json(response);
+        return;
+      }
+
       await TaskService.deleteTask(taskId);
 
       const response: ResponseInterface = {
@@ -229,6 +256,15 @@ class TaskController {
       const { fileId } = req.params;
       const isAdmin = req.isAdmin || false;
       const isGameActive = await GameService.isGameActive();
+
+      if (typeof fileId != 'string') {
+        const response: ResponseInterface = {
+          success: false,
+          message: "Bad request"
+        };
+        res.status(400).json(response);
+        return;
+      }
 
       const fileInfo = await TaskService.getTaskFile(fileId, isAdmin, isGameActive);
 
@@ -416,6 +452,15 @@ class TaskController {
   static async getSolvedTasksByTeam(req: Request, res: Response): Promise<void> {
     try {
       const { teamId } = req.params;
+
+      if (typeof teamId != 'string') {
+        const response: ResponseInterface = {
+          success: false,
+          message: "Bad request"
+        };
+        res.status(400).json(response);
+        return;
+      }
 
       if (!ValidationUtil.isValidUuid(teamId)) {
         const response: ResponseInterface = {

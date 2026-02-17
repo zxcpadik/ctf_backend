@@ -1,10 +1,7 @@
-import { getGameRepository, getTaskRepository, getTeamRepository, getUserRepository, getSubmissionRepository, getTaskGroupRepository } from './database.service';
+import { getSubmissionRepository } from './database.service';
 import logger from './logger.service';
 import { Game, GameStatus } from '../entities/Game';
-import { Task } from '../entities/Task';
-import { User } from '../entities/User';
-import { Team } from '../entities/Team';
-import Environment from '../config/environment';
+import EventEmitterService from './event-emitter.service';
 
 /**
  * Service for managing the global state and operations of the CTF game.
@@ -69,6 +66,7 @@ class GameService {
       await game.save();
 
       logger.info(`Game started successfully. Duration: ${playDurationMinutes} minutes. End time: ${game.endTime}`);
+      EventEmitterService.emitGameStateChanged(game);
       return game;
     } catch (error) {
       logger.error("Failed to start game:", error);
@@ -93,6 +91,7 @@ class GameService {
       await game.save();
 
       logger.info("Game force stopped successfully.");
+      EventEmitterService.emitGameStateChanged(game);
       return game;
     } catch (error) {
       logger.error("Failed to force stop game:", error);
@@ -122,6 +121,7 @@ class GameService {
       await submissionRepository.clear(); // CAUTION: This deletes ALL submission records.
 
       logger.info("Game state, task activity, team scores, and submissions reset.");
+      EventEmitterService.emitGameStateChanged(game);
       return game;
     } catch (error) {
       logger.error("Failed to reset game:", error);

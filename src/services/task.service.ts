@@ -11,6 +11,7 @@ import Environment from '../config/environment';
 import mime from 'mime-types'; // npm install mime-types
 import GameService from './game.service';
 import { GameStatus, Submission } from '../entities';
+import EventEmitterService from './event-emitter.service';
 
 export type TaskRelation = 'group' | 'files' | 'submissions';
 
@@ -98,6 +99,7 @@ class TaskService {
       await taskRepository.save(task); // Update task with file relations
 
       logger.info(`Task '${shortName}' (UUID: ${task.uuid}) created with ${createdFiles.length} files.`);
+      EventEmitterService.emitTaskCreated(task);
       return task;
     } catch (error) {
       logger.error("Failed to create task:", error);
@@ -309,8 +311,6 @@ class TaskService {
         throw new Error("Task not found.");
       }
 
-      const oldIsActive = task.isActive;
-
       // Handle group update
       if (updateData.groupId !== undefined) {
         if (updateData.groupId === null || updateData.groupId === "null") { // Explicitly set to no group
@@ -392,6 +392,7 @@ class TaskService {
       }
 
       logger.info(`Task '${task.shortName}' (UUID: ${task.uuid}) updated.`);
+      EventEmitterService.emitTaskUpdated(task);
       return task;
     } catch (error) {
       logger.error(`Failed to update task ${taskUuid}:`, error);
@@ -411,7 +412,6 @@ class TaskService {
       }
 
       const taskRepository = getTaskRepository();
-      const fileRepository = getFileRepository();
 
       const task = await taskRepository.findOne({
         where: { uuid: taskUuid },
@@ -433,7 +433,9 @@ class TaskService {
         }
       }
 
-      await taskRepository.remove(task); // This will also cascade delete files from DB due to `onDelete: 'CASCADE'`
+      let uuid = task.uuid; // TODO not sure that .remove keep fields :)
+      await taskRepository.remove(task);
+      EventEmitterService.emitTaskDeleted(uuid);
       logger.info(`Task '${task.shortName}' (UUID: ${task.uuid}) and its files deleted.`);
     } catch (error) {
       logger.error(`Failed to delete task ${taskUuid}:`, error);
@@ -520,6 +522,8 @@ class TaskService {
 
         logger.info(`Batch updated ${taskUuids.length} tasks to isActive: ${isActive} and activated ${groupsToActivate.size} groups.`);
       }
+
+      EventEmitterService.emitTaskDescync();
     } catch (error) {
       logger.error("Failed to batch update task active status:", error);
       throw error;

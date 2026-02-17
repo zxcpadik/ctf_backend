@@ -5,7 +5,6 @@ import logger from './logger.service';
 import Environment from '../config/environment';
 import { User } from '../entities/User';
 import { Session } from '../entities/Session';
-import UUIDUtil from '../utils/uuid.util';
 import ValidationUtil from '../utils/validation.util';
 
 /**
@@ -53,7 +52,7 @@ class AuthService {
    * @param {string} userAgent - The User-Agent string from the request.
    * @returns {Promise<{ jwt?: string, passwordNeeded?: boolean, message: string, user?: User, is_password_correct?: boolean }>} Auth result.
    */
-  static async adminAuth(password: string | undefined, userAgent: string): Promise<{ jwt?: string, passwordNeeded?: boolean, message: string, user?: User, is_password_correct?: boolean }> {
+  static async admin_auth(password: string | undefined, userAgent: string): Promise<{ jwt?: string, passwordNeeded?: boolean, message: string, user?: User, is_password_correct?: boolean }> {
     try {
       if (!Environment.ADMIN_PASSWORD_HASH) {
         return { message: "Admin password not configured on server.", passwordNeeded: false };
@@ -130,7 +129,7 @@ class AuthService {
    * @param {string} userAgent - The User-Agent string from the request.
    * @returns {Promise<{ jwt: string, user: User, message: string }>} The JWT and user object.
    */
-  static async userAuth(authCode: string, userAgent: string): Promise<{ jwt: string, user: User, message: string }> {
+  static async user_auth(authCode: string, userAgent: string): Promise<{ jwt: string, user: User, message: string }> {
     try {
       if (!ValidationUtil.isNonEmptyString(authCode) || authCode.length !== 8 || !/^\d+$/.test(authCode)) {
         throw new Error("Invalid authentication code format.");

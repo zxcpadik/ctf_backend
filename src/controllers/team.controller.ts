@@ -198,6 +198,15 @@ class TeamController {
         return;
       }
 
+      if (typeof userId != 'string') {
+        const response: ResponseInterface = {
+          success: false,
+          message: "Bad request"
+        };
+        res.status(400).json(response);
+        return;
+      }
+
       await TeamService.removeMember(req.user.teamId, userId);
 
       const response: ResponseInterface = {

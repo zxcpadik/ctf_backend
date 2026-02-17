@@ -147,6 +147,15 @@ class AdminController {
 
       const { teamId } = req.params;
 
+      if (typeof teamId != 'string') {
+        const response: ResponseInterface = {
+          success: false,
+          message: "Bad request"
+        };
+        res.status(400).json(response);
+        return;
+      }
+
       const team = await TeamService.getTeam(teamId);
 
       if (!team) {
@@ -189,6 +198,15 @@ class AdminController {
       }
 
       const { teamId } = req.params;
+
+      if (typeof teamId != 'string') {
+        const response: ResponseInterface = {
+          success: false,
+          message: "Bad request"
+        };
+        res.status(400).json(response);
+        return;
+      }
 
       const statistics = await TeamService.getTeamStatistics(teamId);
 
@@ -261,6 +279,15 @@ class AdminController {
       }
 
       const { userId } = req.params;
+
+      if (typeof userId != 'string') {
+        const response: ResponseInterface = {
+          success: false,
+          message: "Bad request"
+        };
+        res.status(400).json(response);
+        return;
+      }
 
       await UserService.deleteUser(userId);
 

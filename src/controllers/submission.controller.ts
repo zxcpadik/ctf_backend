@@ -84,6 +84,15 @@ class SubmissionController {
     try {
       const { teamId } = req.params;
 
+      if (typeof teamId != 'string') {
+        const response: ResponseInterface = {
+          success: false,
+          message: "Bad request"
+        };
+        res.status(400).json(response);
+        return;
+      }
+
       const submissions = await SubmissionService.getSubmissionsByTeam(teamId);
 
       const response: ResponseInterface = {

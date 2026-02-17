@@ -8,6 +8,7 @@ import GameService from './services/game.service';
 import ScheduledTasksService from './services/scheduled-tasks.service';
 import { router as apiRouter } from './routes';
 import fs from 'fs';
+import WebSocketService from './services/websocket.service';
 
 class App {
   private app: Application;
@@ -58,10 +59,13 @@ class App {
     // Start background services (auth code cleanup, leaderboard snapshots, game state checks)
     ScheduledTasksService.startAll();
 
-    this.app.listen(this.port, () => {
+    const server = this.app.listen(this.port, () => {
       logger.info(`Server is running on port ${this.port}`);
       logger.info(`Access it at: http://localhost:${this.port}`);
     });
+
+    // Initialize WebSocket server
+    WebSocketService.initialize(server);
 
     // Graceful shutdown
     process.on('SIGINT', this.gracefulShutdown.bind(this));

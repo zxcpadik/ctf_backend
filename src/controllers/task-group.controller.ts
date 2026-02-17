@@ -45,13 +45,13 @@ class TaskGroupController {
   /**
    * Get all task groups
    */
-  static async getAllTaskGroups(req: Request, res: Response): Promise<void> {
+  static async get_all_task_groups(req: Request, res: Response): Promise<void> {
     try {
       const includeTasks = req.query.includeTasks !== 'false'; // Default to true
       const isGameActive = await GameService.isGameActive();
       const isAdmin = req.isAdmin || false;
 
-      const groups = await TaskGroupService.getAllTaskGroups(includeTasks, isGameActive, isAdmin);
+      const groups = await TaskGroupService.get_all_task_groups(includeTasks, isGameActive, isAdmin);
 
       const response: ResponseInterface = {
         success: true,
@@ -79,6 +79,15 @@ class TaskGroupController {
     try {
       const { groupId } = req.params;
       const includeTasks = req.query.includeTasks !== 'false';
+
+      if (typeof groupId != 'string') {
+        const response: ResponseInterface = {
+          success: false,
+          message: "Bad request"
+        };
+        res.status(400).json(response);
+        return;
+      }
 
       const group = await TaskGroupService.getTaskGroupById(groupId, includeTasks);
 
@@ -118,6 +127,15 @@ class TaskGroupController {
       const { groupId } = req.params;
       const { name, description, isActive } = req.body;
 
+      if (typeof groupId != 'string') {
+        const response: ResponseInterface = {
+          success: false,
+          message: "Bad request"
+        };
+        res.status(400).json(response);
+        return;
+      }
+
       const group = await TaskGroupService.updateTaskGroup(groupId, { name, description, isActive });
 
       const response: ResponseInterface = {
@@ -145,6 +163,15 @@ class TaskGroupController {
   static async deleteTaskGroup(req: Request, res: Response): Promise<void> {
     try {
       const { groupId } = req.params;
+
+      if (typeof groupId != 'string') {
+        const response: ResponseInterface = {
+          success: false,
+          message: "Bad request"
+        };
+        res.status(400).json(response);
+        return;
+      }
 
       await TaskGroupService.deleteTaskGroup(groupId);
 

@@ -5,6 +5,7 @@ import { User } from '../entities/User';
 import ValidationUtil from '../utils/validation.util';
 import UserService from './user.service';
 import TaskService from './task.service';
+import EventEmitterService from './event-emitter.service';
 
 interface TeamWithRelations extends Team {
   leader?: User;
@@ -303,6 +304,7 @@ class TeamService {
       await userRepository.save(user);
 
       logger.info(`User ${userId} removed from team ${teamId}`);
+      EventEmitterService.emitTeamMemberLeft(teamId, user);
     } catch (error) {
       logger.error(`Failed to remove member ${userId} from team ${teamId}:`, error);
       throw error;
@@ -342,6 +344,7 @@ class TeamService {
       await teamRepository.save(team);
 
       logger.info(`Team ${teamId} name updated to: ${teamName}`);
+      EventEmitterService.emitTeamUpdated(team);
       return team;
     } catch (error) {
       logger.error(`Failed to update team name for ${teamId}:`, error);
