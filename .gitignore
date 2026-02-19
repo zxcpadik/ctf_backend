@@ -117,3 +117,4 @@ uploads/
 tasks_data/
 .continueignore
 build/
+.continue
