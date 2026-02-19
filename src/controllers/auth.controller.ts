@@ -94,11 +94,12 @@ class AuthController {
     }
   }
 
+  // refactored in 1.0.1
   static async set_username(req: Request, res: Response): Promise<void> {
     try {
       if (req.user!.name) return (res.status(s.CONFLICT).json({ success: false, message: "Name already set" }), void 0);
 
-      const { _name } = req.body;
+      const { name: _name } = req.body;
       if (!_name || typeof _name !== 'string') return (res.status(s.BAD_REQUEST).json({ success: false, message: "Name can't be empty" }), void 0);
       const name = _name.trim();
       const username_length = name.length;
@@ -124,12 +125,13 @@ class AuthController {
     }
   }
 
+  // refactored in 1.0.1
   static async set_team_name(req: Request, res: Response): Promise<void> {
     try {
       if (req.user?.team) return (res.status(s.CONFLICT).json({ success: false, message: "Team already created" }), void 0);
       if (!req.user?.name) return (res.status(s.PRECONDITION_FAILED).json({ success: false, message: "Set your username first before setting team name" }), void 0);
 
-      const { _team_name } = req.body;
+      const { team_name: _team_name } = req.body;
       if (!_team_name || typeof _team_name !== 'string') return (res.status(s.BAD_REQUEST).json({ error: 'Team name can not be empty' }), void 0);
       const team_name = _team_name.trim();
       const team_name_len = team_name.length;
