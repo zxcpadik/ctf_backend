@@ -4,6 +4,7 @@ import logger from '../services/logger.service';
 import { ResponseInterface, UserResponseData } from '../interfaces/response.interface';
 import { getTeamRepository, getUserRepository } from '../services/database.service';
 import EventEmitterService from '../services/event-emitter.service';
+import s from "http-status";
 
 class AuthController {
   static async admin_auth(req: Request, res: Response): Promise<void> {
@@ -95,72 +96,52 @@ class AuthController {
 
   static async set_username(req: Request, res: Response): Promise<void> {
     try {
-      if (!req.user) {
-        res.status(401).json({ success: false, message: "Authentication required" });
-        return;
-      }
+      if (req.user!.name) return (res.status(s.CONFLICT).json({ success: false, message: "Name already set" }), void 0);
 
-      if (req.user.name) {
-        res.status(401).json({ success: false, message: "No-no-no mister fish, you can't change nickname :)" });
-        return;
-      }
-
-      const { name } = req.body;
-      if (!name || name.trim().length < 2) {
-        res.status(400).json({ success: false, message: "Name must be at least 2 characters long" });
-        return;
-      }
+      const { _name } = req.body;
+      if (!_name || typeof _name !== 'string') return (res.status(s.BAD_REQUEST).json({ success: false, message: "Name can't be empty" }), void 0);
+      const name = _name.trim();
+      const username_length = name.length;
+      if (username_length < 3) return (res.status(s.LENGTH_REQUIRED).json({ success: false, message: "Name must be at least 3 characters long" }), void 0);
+      if (username_length > 16) return (res.status(s.REQUEST_ENTITY_TOO_LARGE).json({ success: false, message: "Name can't be longer than 16 characters" }), void 0);
 
       const user_repo = getUserRepository();
-      req.user.name = name.trim();
-      await user_repo.save(req.user);
+      req.user!.name = name;
+      await user_repo.save(req.user!);
 
-      if (!req.user.isLeader && req.user.teamId) {
-        EventEmitterService.emitTeamMemberJoined(req.user.teamId, req.user);
+      if (!req.user!.isLeader && req.user!.teamId) {
+        EventEmitterService.emitTeamMemberJoined(req.user!.teamId, req.user);
       }
 
-      res.status(200).json({
+      res.status(s.OK).json({
         success: true,
-        message: "Username set successfully",
+        message: "Name set successfully",
         data: { user: req.user }
       });
     } catch (error: any) {
       logger.error("Set username error:", error);
-      res.status(500).json({ success: false, message: error.message || "Failed to set username" });
+      res.status(s.INTERNAL_SERVER_ERROR).json({ success: false, message: error?.message || "Failed to set username" });
     }
   }
 
   static async set_team_name(req: Request, res: Response): Promise<void> {
     try {
-      if (!req.user) {
-        res.status(403).json({ success: false, message: "Only unfinalized team leaders can set team name" });
-        return;
-      }
+      if (req.user?.team) return (res.status(s.CONFLICT).json({ success: false, message: "Team already created" }), void 0);
+      if (!req.user?.name) return (res.status(s.PRECONDITION_FAILED).json({ success: false, message: "Set your username first before setting team name" }), void 0);
 
-      if (!req.user.name) {
-        res.status(400).json({ success: false, message: "Please set your username first before setting team name" });
-        return;
-      }
+      const { _team_name } = req.body;
+      if (!_team_name || typeof _team_name !== 'string') return (res.status(s.BAD_REQUEST).json({ error: 'Team name can not be empty' }), void 0);
+      const team_name = _team_name.trim();
+      const team_name_len = team_name.length;
 
-      if (req.user.team) {
-        res.status(400).json({ success: false, message: "Your team already created" });
-        return;
-      }
-
-      const { team_name } = req.body;
-      if (!team_name || team_name.trim().length < 2) {
-        res.status(400).json({ success: false, message: "Team name must be at least 2 characters long" });
-        return;
-      }
+      if (team_name_len < 3) return (res.status(s.LENGTH_REQUIRED).json({ success: false, message: "Team name must be at least 3 characters long" }), void 0);
+      if (team_name_len > 16) return (res.status(s.REQUEST_ENTITY_TOO_LARGE).json({ success: false, message: "Team name can't be longer than 16 characters" }), void 0);
 
       const team_repo = getTeamRepository();
-      const existing_team = await team_repo.findOne({ where: { name: team_name.trim() } });
-      if (existing_team) {
-        res.status(400).json({ success: false, message: "Team name already taken" });
-        return;
-      }
+      const is_team_exists = await team_repo.exists({ where: { name: team_name } });
+      if (is_team_exists) return (res.status(s.CONFLICT).json({ success: false, message: "Team name already taken" }), void 0);
 
-      const new_team = team_repo.create({ name: team_name.trim() });
+      const new_team = team_repo.create({ name: team_name });
       await team_repo.save(new_team);
       EventEmitterService.emitTeamCreated(new_team);
 
@@ -169,14 +150,14 @@ class AuthController {
       req.user.teamId = new_team.uuid;
       await user_repo.save(req.user);
 
-      res.status(200).json({
+      res.status(s.OK).json({
         success: true,
         message: "Team created and account finalized successfully",
         data: { user: req.user, team: new_team }
       });
     } catch (error: any) {
       logger.error("Set team name error:", error);
-      res.status(500).json({ success: false, message: error.message || "Failed to set team name" });
+      res.status(s.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message || "Failed to set team name" });
     }
   }
 }

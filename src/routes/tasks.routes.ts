@@ -12,7 +12,7 @@ router.put('/:taskId', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, 
 router.delete('/:taskId', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, TaskController.deleteTask);
 
 // Task Files
-router.get('/:taskId/files/:fileId', AuthMiddleware.authenticate, AuthMiddleware.ensureAccountFinalized, TaskController.downloadTaskFile);
+router.get('/files/:fileId', AuthMiddleware.authenticate, AuthMiddleware.ensureAccountFinalized, TaskController.downloadTaskFile);
 
 // Batch Operations
 router.patch('/batch/status', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, TaskController.batchUpdateTaskStatus);

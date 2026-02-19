@@ -44,7 +44,7 @@ class AuthMiddleware {
 
       const session = await sessionRepository.findOne({
         where: { uuid: decoded.sessionId },
-        relations: ['user'], // Eagerly load the associated user
+        relations: ['user']
       });
 
       if (!session || session.expiresAt < new Date()) {
