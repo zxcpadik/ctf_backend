@@ -6,6 +6,7 @@ import { ResponseInterface } from '../interfaces/response.interface';
 import multer from 'multer';
 import path from 'path';
 import ValidationUtil from '../utils/validation.util';
+import s from "http-status";
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -396,53 +397,27 @@ class TaskController {
     }
   }
 
+  // refactored in 1.0.1
   /**
  * Get current user's solved tasks
  */
   static async getMySolvedTasks(req: Request, res: Response): Promise<void> {
     try {
-      const user = req.user;
-      const isAdmin = req.isAdmin || false;
+      if (!req?.user?.teamId) return (res.status(s.FORBIDDEN).json({ success: false, message: "User is not part of a team" }), void 0);
 
-      if (!user) {
-        const response: ResponseInterface = {
-          success: false,
-          message: "Authentication required"
-        };
-        res.status(401).json(response);
-        return;
-      }
+      const solvedTasks = await TaskService.getSolvedTasks(req.user.teamId);
 
-      // For regular users, only show their team's solved tasks
-      const teamId = isAdmin ? undefined : user.teamId;
-
-      if (!teamId && !isAdmin) {
-        const response: ResponseInterface = {
-          success: false,
-          message: "User is not part of a team"
-        };
-        res.status(400).json(response);
-        return;
-      }
-
-      const solvedTasks = await TaskService.getSolvedTasks(teamId ?? undefined);
-
-      const response: ResponseInterface = {
+      res.status(s.OK).json({
         success: true,
         message: "Solved tasks retrieved successfully",
         data: solvedTasks
-      };
-
-      res.status(200).json(response);
+      });
     } catch (error: any) {
       logger.error("Get solved tasks error:", error);
-
-      const response: ResponseInterface = {
+      res.status(s.INTERNAL_SERVER_ERROR).json({
         success: false,
         message: error.message || "Failed to retrieve solved tasks"
-      };
-
-      res.status(500).json(response);
+      });
     }
   }
 

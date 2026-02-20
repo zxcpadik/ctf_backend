@@ -131,6 +131,7 @@ class AuthService {
    */
   static async user_auth(authCode: string, userAgent: string): Promise<{ jwt: string, user: User, message: string }> {
     try {
+      authCode = authCode.replaceAll(' ', ''); // TODO move validation to controller
       if (!ValidationUtil.isNonEmptyString(authCode) || authCode.length !== 8 || !/^\d+$/.test(authCode)) {
         throw new Error("Invalid authentication code format.");
       }

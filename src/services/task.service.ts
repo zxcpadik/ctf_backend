@@ -669,9 +669,7 @@ class TaskService {
         .leftJoinAndSelect('submission.team', 'team')
         .where('submission.isCorrect = :isCorrect', { isCorrect: true });
 
-      if (teamId) {
-        query = query.andWhere('submission.teamId = :teamId', { teamId });
-      }
+      if (teamId) query = query.andWhere('submission.teamId = :teamId', { teamId });
 
       const submissions = await query
         .orderBy('submission.timestamp', 'ASC')

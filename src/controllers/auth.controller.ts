@@ -30,7 +30,7 @@ class AuthController {
     try {
       const { auth_code } = req.body;
       const user_agent = req.headers['user-agent'] || '';
-      const result = await AuthService.user_auth(auth_code, user_agent);
+      const result = await AuthService.user_auth(auth_code?.trim(), user_agent);
 
       res.status(200).json({
         success: true,
