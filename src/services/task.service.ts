@@ -85,11 +85,11 @@ class TaskService {
 
         const file = fileRepository.create({
           uuid: fileUuid,
-          originalName: uploadedFile.originalname,
-          mimeType: uploadedFile.mimetype || mime.lookup(uploadedFile.originalname) || 'application/octet-stream',
+          original_name: uploadedFile.originalname,
+          mime_type: uploadedFile.mimetype || mime.lookup(uploadedFile.originalname) || 'application/octet-stream',
           path: fileUuid, // Relative path within TASK_FILES_PATH
           task: task,
-          taskId: task.uuid,
+          task_id: task.uuid,
           byte_size: uploadedFile.size
         });
         await fileRepository.save(file);
@@ -229,7 +229,7 @@ class TaskService {
    * @param {boolean} isGameActive - True if the game is active for players.
    * @returns {Promise<{ filePath: string, originalName: string, mimeType: string } | null>} File path and metadata, or null.
    */
-  static async getTaskFile(fileUuid: string, isAdmin: boolean, isGameActive: boolean): Promise<{ filePath: string, originalName: string, mimeType: string, byte_size: number } | null> {
+  static async getTaskFile(fileUuid: string, isAdmin: boolean, isGameActive: boolean): Promise<{ file_path: string, original_name: string, mime_type: string, byte_size: number } | null> {
     try {
       if (!ValidationUtil.isValidUuid(fileUuid)) {
         throw new Error("Invalid file UUID format.");
@@ -268,9 +268,9 @@ class TaskService {
       }
 
       return {
-        filePath: absolutePath,
-        originalName: file.originalName,
-        mimeType: file.mimeType,
+        file_path: absolutePath,
+        original_name: file.original_name,
+        mime_type: file.mime_type,
         byte_size: file.byte_size
       };
     } catch (error) {
@@ -379,11 +379,11 @@ class TaskService {
 
         const newFile = fileRepository.create({
           uuid: fileUuid,
-          originalName: uploadedFile.originalname,
-          mimeType: uploadedFile.mimetype || mime.lookup(uploadedFile.originalname) || 'application/octet-stream',
+          original_name: uploadedFile.originalname,
+          mime_type: uploadedFile.mimetype || mime.lookup(uploadedFile.originalname) || 'application/octet-stream',
           path: fileUuid,
           task: task,
-          taskId: task.uuid,
+          task_id: task.uuid,
           byte_size: uploadedFile.size,
         });
         await fileRepository.save(newFile);

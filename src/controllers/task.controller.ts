@@ -278,7 +278,7 @@ class TaskController {
         return;
       }
 
-      res.download(fileInfo.filePath, fileInfo.originalName, (err) => {
+      res.download(fileInfo.file_path, fileInfo.original_name, (err) => {
         if (err) {
           logger.error("File download error:", err);
           if (!res.headersSent) {

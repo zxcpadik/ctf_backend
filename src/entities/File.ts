@@ -8,30 +8,30 @@ import { Task } from "./Task";
 @Entity()
 export class File extends BaseEntity {
   @PrimaryGeneratedColumn("uuid")
-  uuid: string; // Used as the filename on disk
+  uuid: string;
 
   @Column()
-  originalName: string;
+  original_name: string;
 
   @Column()
   byte_size: number;
 
   @Column()
-  mimeType: string;
+  mime_type: string;
 
   @Column()
-  path: string; // Relative path from the tasks_data directory
+  path: string;
 
   @ManyToOne(() => Task, task => task.files, { onDelete: 'CASCADE' })
   @JoinColumn({ name: "taskId" })
   task: Task;
 
   @Column()
-  taskId: string; // Foreign key to Task
+  task_id: string;
 
   @CreateDateColumn()
-  createdAt: Date;
+  created_at: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date;
+  updated_at: Date;
 }

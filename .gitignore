@@ -118,3 +118,5 @@ tasks_data/
 .continueignore
 build/
 .continue
+
+ctf_backend.code-workspace
