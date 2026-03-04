@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import AuthService from '../services/auth.service';
 import TeamService from '../services/team.service';
-import UserService from '../services/user.service';
+import UserService, { UserDeleteStrategy_ } from '../services/user.service';
 import SubmissionService from '../services/submission.service';
 import TaskService from '../services/task.service';
 import logger from '../services/logger.service';
@@ -136,14 +136,15 @@ class AdminController {
 
   /**
    * DELETE /admin/users/:user_uuid
-   * Delete a single user. Strategy 'ignore' — team is preserved.
+   * Delete a single user.
    */
   static async delete_user(req: Request, res: Response): Promise<void> {
     try {
-      if (req.params.user_uuid === req.user!.uuid)
-        return (res.status(s.BAD_REQUEST).json({ success: false, message: "You cannot delete yourself" }), void 0);
+      if (req.params.user_uuid === req.user!.uuid) return (res.status(s.BAD_REQUEST).json({ success: false, message: "You cannot delete yourself" }), void 0);
+      const strategy = req.body.strategy;
+      if (strategy && !UserDeleteStrategy_.includes(strategy)) return (res.status(s.BAD_REQUEST).json({ success: false, message: `Delete strategy inavlid. valid options: [${UserDeleteStrategy_.join(' ,')}]` }), void 0);
 
-      await UserService.delete(req.params.user_uuid, 'ignore');
+      await UserService.delete(req.params.user_uuid, strategy);
       return (res.status(s.OK).json({ success: true, message: "User deleted successfully" }), void 0);
     } catch (error: any) {
       logger.error("Delete user error:", error);

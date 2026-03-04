@@ -6,7 +6,10 @@ import MyError from '../utils/myerror.util';
 import s from "http-status";
 
 export type UserRelations = 'team' | 'sessions' | 'submissions';
-export type UserRemoveStrategy = 'ignore' | 'reassign' | 'recursive';
+// export const UserRelations_ = ['team', 'sessions', 'submissions'];
+// TODO - add validation in contoller
+export type UserDeleteStrategy = 'ignore' | 'reassign' | 'recursive';
+export const UserDeleteStrategy_ = ['ignore', 'reassign', 'recursive'];
 
 /**
  * Service for managing users
@@ -51,7 +54,7 @@ class UserService {
   /**
    * Delete a user by UUID
    */
-  static async delete(user_uuid: any | User, strategy: UserRemoveStrategy = 'ignore'): Promise<void> {
+  static async delete(user_uuid: any | User, strategy: UserDeleteStrategy = 'ignore'): Promise<void> {
     try {
       if (typeof user_uuid === "string" && !ValidationUtil.isValidUuid(user_uuid)) throw new MyError("Invalid user reference", { code: s.BAD_REQUEST });
 
