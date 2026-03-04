@@ -1,35 +1,36 @@
-import { getTaskGroupRepository, getTaskRepository } from './database.service';
+import { getTaskGroupRepository } from './database.service';
 import logger from './logger.service';
 import { TaskGroup } from '../entities/TaskGroup';
-import { Task } from '../entities/Task';
 import ValidationUtil from '../utils/validation.util';
+import MyError from '../utils/myerror.util';
+import s from "http-status";
+
+export type TaskGroupRelations = "tasks";
 
 class TaskGroupService {
   /**
    * Create a new task group
    */
-  static async createTaskGroup(name: string, description?: string): Promise<TaskGroup> {
+  static async create(name: string, description?: string): Promise<TaskGroup> {
     try {
-      if (!ValidationUtil.isNonEmptyString(name)) {
-        throw new Error("Group name cannot be empty.");
-      }
+      const new_name = name?.trim();
+      if (!ValidationUtil.isNonEmptyString(new_name)) throw new MyError("Group name cannot be empty", { code: s.UNPROCESSABLE_ENTITY });
+      if (new_name.length > 254) throw new MyError("Task group name can't be longer than 254 characters", { code: s.REQUEST_ENTITY_TOO_LARGE });
 
-      const taskGroupRepository = getTaskGroupRepository();
+      const task_group_repo = getTaskGroupRepository();
 
       // Check if group name already exists
-      const existingGroup = await taskGroupRepository.findOne({ where: { name } });
-      if (existingGroup) {
-        throw new Error(`Task group with name '${name}' already exists.`);
-      }
+      const is_name_taken = await task_group_repo.exists({ where: { name: new_name } });
+      if (is_name_taken) throw new MyError(`Task group with name '${name}' already exists`, { code: s.CONFLICT });
 
-      const newGroup = taskGroupRepository.create({
+      const new_group = task_group_repo.create({
         name,
         description: description || null,
       });
 
-      await taskGroupRepository.save(newGroup);
-      logger.info(`Task group '${name}' created with UUID: ${newGroup.uuid}`);
-      return newGroup;
+      await task_group_repo.save(new_group);
+      logger.info(`Task group '${name}' created with UUID: ${new_group.uuid}`);
+      return new_group;
     } catch (error) {
       logger.error("Failed to create task group:", error);
       throw error;
@@ -39,20 +40,15 @@ class TaskGroupService {
   /**
    * Get all task groups with their tasks
    */
-  static async get_all_task_groups(includeTasks: boolean = true, isGameActive: boolean = false, isAdmin: boolean = false): Promise<TaskGroup[]> {
+  static async get_all(relations: TaskGroupRelations[] = []): Promise<TaskGroup[]> {
     try {
-      if (!isAdmin && !isGameActive) {
-        return [];
-      }
+      const task_group_repo = getTaskGroupRepository();
 
-      const taskGroupRepository = getTaskGroupRepository();
-      const relations = includeTasks ? ['tasks'] : [];
-
-      return await taskGroupRepository.find({
+      return await task_group_repo.find({
         relations,
         order: {
           name: 'ASC',
-          createdAt: 'DESC'
+          created_at: 'DESC'
         }
       });
     } catch (error) {
@@ -64,21 +60,17 @@ class TaskGroupService {
   /**
    * Get a specific task group by ID
    */
-  static async getTaskGroupById(groupId: string, includeTasks: boolean = true): Promise<TaskGroup | null> {
+  static async get(group_uuid: any, relations: TaskGroupRelations[] = []): Promise<TaskGroup | null> {
     try {
-      if (!ValidationUtil.isValidUuid(groupId)) {
-        throw new Error("Invalid group UUID format.");
-      }
+      if (!ValidationUtil.isValidUuid(group_uuid)) throw new MyError("Invalid group UUID", { code: s.BAD_REQUEST });
 
-      const taskGroupRepository = getTaskGroupRepository();
-      const relations = includeTasks ? ['tasks'] : [];
-
-      return await taskGroupRepository.findOne({
-        where: { uuid: groupId },
+      const task_group_repo = getTaskGroupRepository();
+      return await task_group_repo.findOne({
+        where: { uuid: group_uuid },
         relations
       });
     } catch (error) {
-      logger.error(`Failed to get task group ${groupId}:`, error);
+      logger.error(`Failed to get task group ${group_uuid}:`, error);
       throw error;
     }
   }
@@ -86,150 +78,59 @@ class TaskGroupService {
   /**
    * Update a task group
    */
-  static async updateTaskGroup(groupId: string, updateData: { name?: string; description?: string; isActive?: boolean }): Promise<TaskGroup> {
+  static async update(group_uuid: any | TaskGroup, update_data: { name?: string; description?: string; is_active?: boolean }): Promise<TaskGroup> {
     try {
-      if (!ValidationUtil.isValidUuid(groupId)) {
-        throw new Error("Invalid group UUID format.");
-      }
+      if (typeof group_uuid == "string" && !ValidationUtil.isValidUuid(group_uuid)) throw new MyError("Invalid group reference", { code: s.BAD_REQUEST });
 
-      const taskGroupRepository = getTaskGroupRepository();
-      const group = await taskGroupRepository.findOne({ where: { uuid: groupId } });
+      const group = typeof group_uuid == "string" ? (await TaskGroupService.get(group_uuid)) : group_uuid;
+      if (!group) throw new MyError("Task group not found", { code: s.NOT_FOUND });
+      const task_group_repo = getTaskGroupRepository();
 
-      if (!group) {
-        throw new Error("Task group not found.");
-      }
-
-      const oldIsActive = group.isActive;
-
-      if (updateData.name !== undefined) {
-        if (!ValidationUtil.isNonEmptyString(updateData.name)) {
-          throw new Error("Group name cannot be empty.");
-        }
+      const new_name = update_data.name?.trim();
+      if (new_name != undefined) {
+        if (!ValidationUtil.isNonEmptyString(new_name)) throw new MyError("Group name cannot be empty", { code: s.UNPROCESSABLE_ENTITY });
+        if (new_name.length > 254) throw new MyError("Task group name can't be longer than 254 characters", { code: s.REQUEST_ENTITY_TOO_LARGE });
 
         // Check for duplicate name
-        const existingGroup = await taskGroupRepository.findOne({
-          where: { name: updateData.name }
+        const existing_group = await task_group_repo.findOne({
+          where: { name: new_name }
         });
-        if (existingGroup && existingGroup.uuid !== groupId) {
-          throw new Error(`Task group with name '${updateData.name}' already exists.`);
-        }
+        if (existing_group && existing_group.uuid !== group.uuid) throw new MyError(`Task group with name '${new_name}' already exists`, { code: s.CONFLICT });
 
-        group.name = updateData.name;
+        group.name = new_name;
       }
 
-      if (updateData.description !== undefined) {
-        group.description = updateData.description;
-      }
+      if (update_data.description !== undefined) group.description = update_data.description;
+      if (update_data.is_active !== undefined) group.is_active = update_data.is_active;
 
-      if (updateData.isActive !== undefined) {
-        group.isActive = updateData.isActive;
-      }
+      await task_group_repo.save(group);
 
-      await taskGroupRepository.save(group);
-
-      logger.info(`Task group '${group.name}' updated.`);
+      logger.info(`Task group '${group.name}' updated`);
       return group;
     } catch (error) {
-      logger.error(`Failed to update task group ${groupId}:`, error);
+      logger.error(`Failed to update task group ${typeof group_uuid == "string" ? group_uuid : group_uuid.uuid}:`, error);
       throw error;
     }
   }
 
   /**
-   * Delete a task group (tasks will have their groupId set to null due to onDelete: 'SET NULL')
+   * Delete a task group
    */
-  static async deleteTaskGroup(groupId: string): Promise<void> {
+  static async delete(group_uuid: any | TaskGroup): Promise<void> {
     try {
-      if (!ValidationUtil.isValidUuid(groupId)) {
-        throw new Error("Invalid group UUID format.");
-      }
+      if (typeof group_uuid == "string" && !ValidationUtil.isValidUuid(group_uuid)) throw new MyError("Invalid group UUID", { code: s.BAD_REQUEST });
 
-      const taskGroupRepository = getTaskGroupRepository();
-      const group = await taskGroupRepository.findOne({ where: { uuid: groupId } });
+      const group = typeof group_uuid == "string" ? (await TaskGroupService.get(group_uuid)) : group_uuid;
+      if (!group) throw new MyError("Task group not found", { code: s.NOT_FOUND });
 
-      if (!group) {
-        throw new Error("Task group not found.");
-      }
-
-      await taskGroupRepository.remove(group);
+      await getTaskGroupRepository().remove(group);
       logger.info(`Task group '${group.name}' deleted.`);
     } catch (error) {
-      logger.error(`Failed to delete task group ${groupId}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Batch update task groups (active/inactive status)
-   */
-  static async batchUpdateTaskGroups(groupIds: string[], isActive: boolean): Promise<void> {
-    try {
-      const taskGroupRepository = getTaskGroupRepository();
-
-      if (groupIds.length === 0) {
-        // Update all groups and cascade to all tasks
-        await taskGroupRepository.update({}, { isActive });
-
-        // Cascade to all tasks
-        const taskRepository = getTaskRepository();
-        await taskRepository.update({}, { isActive });
-
-        logger.info(`All task groups and tasks set to isActive: ${isActive}.`);
-      } else {
-        // Update specific groups and cascade to their tasks
-        for (const groupId of groupIds) {
-          if (!ValidationUtil.isValidUuid(groupId)) {
-            logger.warn(`Skipping invalid group UUID during batch update: ${groupId}`);
-            continue;
-          }
-          await taskGroupRepository.update({ uuid: groupId }, { isActive });
-          await TaskGroupService.cascadeGroupActiveStatus(groupId, isActive);
-        }
-        logger.info(`Batch updated ${groupIds.length} task groups to isActive: ${isActive}.`);
-      }
-    } catch (error) {
-      logger.error("Failed to batch update task groups:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Batch delete task groups
-   */
-  static async batchDeleteTaskGroups(groupIds: string[]): Promise<void> {
-    try {
-      for (const groupId of groupIds) {
-        if (!ValidationUtil.isValidUuid(groupId)) {
-          logger.warn(`Skipping invalid group UUID during batch delete: ${groupId}`);
-          continue;
-        }
-        await TaskGroupService.deleteTaskGroup(groupId);
-      }
-      logger.info(`Batch deleted ${groupIds.length} task groups.`);
-    } catch (error) {
-      logger.error("Failed to batch delete task groups:", error);
-      throw error;
-    }
-  }
-
-  private static async cascadeGroupActiveStatus(groupId: string, isActive: boolean): Promise<void> {
-    try {
-      const taskRepository = getTaskRepository();
-
-      // Update all tasks in this group to match the group's active status
-      await taskRepository
-        .createQueryBuilder()
-        .update(Task)
-        .set({ isActive: isActive })
-        .where('groupId = :groupId', { groupId })
-        .execute();
-
-      logger.info(`Cascaded group active status (${isActive}) to tasks in group ${groupId}`);
-    } catch (error) {
-      logger.error(`Failed to cascade group active status for group ${groupId}:`, error);
+      logger.error(`Failed to delete task group ${typeof group_uuid == "string" ? group_uuid : group_uuid.uuid}:`, error);
       throw error;
     }
   }
 }
 
+export { TaskGroupService };
 export default TaskGroupService;

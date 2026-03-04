@@ -1,209 +1,139 @@
-import { getSubmissionRepository, getTaskRepository, getTeamRepository, getUserRepository, getGameRepository } from './database.service';
+import { getSubmissionRepository, getTaskRepository, getTeamRepository } from './database.service';
 import logger from './logger.service';
 import { Submission } from '../entities/Submission';
 import { User } from '../entities/User';
-import { GameStatus } from '../entities/Game';
-import GameService from './game.service'; // To check game status
 import ValidationUtil from '../utils/validation.util';
-import EventEmitterService from './event-emitter.service';
+import MyError from '../utils/myerror.util';
+import s from "http-status";
 
-/**
- * Service for handling flag submissions, verification, and score updates.
- * Also includes rate limiting logic.
- */
+export type SubmissionRelation = 'user' | 'task' | 'team';
+
 class SubmissionService {
-  // In-memory rate limiting map: { sessionId: { lastSubmissionTime: number, count: number } }
-  private static rateLimitMap: Map<string, { lastAttempt: number; count: number }> = new Map();
-  private static readonly RATE_LIMIT_COUNT = 10; // Max attempts
-  private static readonly RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-
   /**
-   * Verifies a submitted flag against a task's correct flag.
-   * Handles score updates and records the submission.
-   * Applies rate limiting per session.
-   * @param {string} taskId - The UUID of the task.
-   * @param {string} submittedFlag - The flag submitted by the user.
-   * @param {User} user - The authenticated user submitting the flag.
-   * @param {string} sessionId - The UUID of the user's current session.
-   * @param {string} ipAddress - The IP address of the user.
-   * @param {string} userAgent - The User-Agent of the user.
-   * @returns {Promise<{ isCorrect: boolean, message: string, retryAfter?: number }>} Verification result.
+   * Verify a submitted flag against a task's correct flag.
+   * Records the submission only if the flag is correct.
+   * A task can only be solved once per team.
    */
-  static async verifyFlag(
-    taskId: string,
-    submittedFlag: string,
+  static async verify(
+    task_uuid: string,
+    submitted_flag: string,
     user: User,
-    sessionId: string,
-    ipAddress: string,
-    userAgent: string
-  ): Promise<{ isCorrect: boolean, message: string, retryAfter?: number }> {
+  ): Promise<{ is_correct: boolean, message: string }> {
     try {
-      if (!ValidationUtil.isValidUuid(taskId)) {
-        throw new Error("Invalid task UUID format.");
-      }
-      if (!ValidationUtil.isNonEmptyString(submittedFlag)) {
-        throw new Error("Submitted flag cannot be empty.");
-      }
-      if (!user.teamId) {
-        throw new Error("User is not part of a team.");
-      }
+      if (!ValidationUtil.isValidUuid(task_uuid)) throw new MyError("Invalid task UUID", { code: s.BAD_REQUEST });
+      if (!ValidationUtil.isNonEmptyString(submitted_flag)) throw new MyError("Submitted flag cannot be empty", { code: s.UNPROCESSABLE_ENTITY });
+      if (!user.team_uuid) throw new MyError("User is not part of a team", { code: s.FORBIDDEN });
 
-      const game = await GameService.getGameStatus();
-      if (game.status !== GameStatus.IN_PROCESS || !await GameService.isGameActive()) {
-        return { isCorrect: false, message: "The game is not currently active." };
-      }
+      const task_repo = getTaskRepository();
+      const submission_repo = getSubmissionRepository();
+      const team_repo = getTeamRepository();
 
-      // Apply rate limiting
-      const rateLimitInfo = SubmissionService.rateLimitMap.get(sessionId) || { lastAttempt: 0, count: 0 };
-      const currentTime = Date.now();
+      const task = await task_repo.findOne({ where: { uuid: task_uuid, is_active: true } });
+      if (!task) throw new MyError("Task not found or inactive", { code: s.NOT_FOUND });
 
-      if (currentTime - rateLimitInfo.lastAttempt > SubmissionService.RATE_LIMIT_WINDOW_MS) {
-        // Reset count if window has passed
-        rateLimitInfo.count = 0;
-      }
-
-      if (rateLimitInfo.count >= SubmissionService.RATE_LIMIT_COUNT) {
-        const retryAfter = Math.ceil(
-          (SubmissionService.RATE_LIMIT_WINDOW_MS - (currentTime - rateLimitInfo.lastAttempt)) / 1000
-        );
-        return {
-          isCorrect: false,
-          message: "Rate limit exceeded. Please try again later.",
-          retryAfter
-        };
-      }
-
-      // Update rate limit info
-      rateLimitInfo.count++;
-      rateLimitInfo.lastAttempt = currentTime;
-      SubmissionService.rateLimitMap.set(sessionId, rateLimitInfo);
-
-      const taskRepository = getTaskRepository();
-      const submissionRepository = getSubmissionRepository();
-      const teamRepository = getTeamRepository();
-
-      const task = await taskRepository.findOne({
-        where: { uuid: taskId, isActive: true }
+      // Check if the team has already solved this task
+      const already_solved = await submission_repo.exists({
+        where: { task_uuid: task.uuid, team_uuid: user.team_uuid }
       });
+      if (already_solved) throw new MyError("Your team has already solved this task", { code: s.CONFLICT });
 
-      if (!task) {
-        return { isCorrect: false, message: "Task not found or inactive." };
-      }
 
-      // Check if user has already solved this task
-      const existingCorrectSubmission = await submissionRepository.findOne({
-        where: {
-          userId: user.uuid,
-          taskId: task.uuid,
-          isCorrect: true
-        }
-      });
+      const is_correct = task.is_case_sensitive ? (submitted_flag.trim() === task.flag) : (submitted_flag.trim().toLowerCase() === task.flag.toLowerCase());
+      if (!is_correct) return { is_correct: false, message: "Incorrect flag" };
 
-      if (existingCorrectSubmission) {
-        return { isCorrect: false, message: "You have already solved this task." };
-      }
-
-      const isCorrect = submittedFlag.trim() === task.flag;
-      const submission = submissionRepository.create({
+      // Record the correct submission and update team score
+      const submission = submission_repo.create({
         user,
-        userId: user.uuid,
+        user_uuid: user.uuid,
         task,
-        taskId: task.uuid,
-        teamId: user.teamId,
-        submittedFlag,
-        isCorrect,
-        ipAddress,
-        userAgent,
-        timestamp: new Date()
+        task_uuid: task.uuid,
+        team_uuid: user.team_uuid,
       });
+      await submission_repo.save(submission);
 
-      await submissionRepository.save(submission);
-
-      if (isCorrect) {
-        // Update team score
-        const team = await teamRepository.findOne({ where: { uuid: user.teamId } });
-        if (team) {
-          team.score += task.score;
-          await teamRepository.save(team);
-        }
-
-        EventEmitterService.emitSubmissionResult(submission, true);
-        return { isCorrect: true, message: "Correct flag! Points awarded." };
-      } else {
-        EventEmitterService.emitSubmissionResult(submission, false);
-        return { isCorrect: false, message: "Incorrect flag." };
+      const team = await team_repo.findOne({ where: { uuid: user.team_uuid } });
+      if (team) {
+        team.score += task.score;
+        await team_repo.save(team);
       }
+
+      logger.info(`Task '${task.uuid}' solved by user '${user.uuid}' (team '${user.team_uuid}')`);
+      return { is_correct: true, message: "Correct flag! Points awarded" };
     } catch (error) {
       logger.error("Flag verification error:", error);
-      throw new Error("Failed to verify flag.");
-    }
-  }
-
-  /**
-   * Gets all submissions for admin review.
-   * @returns {Promise<Submission[]>} Array of all submissions.
-   */
-  static async getAllSubmissions(): Promise<Submission[]> {
-    try {
-      const submissionRepository = getSubmissionRepository();
-      return await submissionRepository.find({
-        relations: ['user', 'task', 'team'],
-        order: { timestamp: 'DESC' }
-      });
-    } catch (error) {
-      logger.error("Failed to get submissions:", error);
       throw error;
     }
   }
 
   /**
-   * Gets submissions by team ID
+   * Get all submissions.
    */
-  static async getSubmissionsByTeam(teamId: string): Promise<Submission[]> {
+  static async get_all(relations: SubmissionRelation[] = []): Promise<Submission[]> {
     try {
-      if (!ValidationUtil.isValidUuid(teamId)) {
-        throw new Error("Invalid team UUID format.");
-      }
-
-      const submissionRepository = getSubmissionRepository();
-      return await submissionRepository.find({
-        where: { teamId },
-        relations: ['user', 'task'],
-        order: { timestamp: 'DESC' }
+      const submission_repo = getSubmissionRepository();
+      return await submission_repo.find({
+        relations,
+        order: { timestamp: 'DESC' },
       });
     } catch (error) {
-      logger.error(`Failed to get submissions for team ${teamId}:`, error);
+      logger.error("Failed to get all submissions:", error);
       throw error;
     }
   }
 
   /**
-   * Gets submissions by user ID
+   * Get all submissions for a specific team.
    */
-  static async getUserSubmissions(userId: string): Promise<Submission[]> {
+  static async get_all_team(team_uuid: any, relations: SubmissionRelation[] = []): Promise<Submission[]> {
     try {
-      if (!ValidationUtil.isValidUuid(userId)) {
-        throw new Error("Invalid user UUID format.");
-      }
+      if (!ValidationUtil.isValidUuid(team_uuid)) throw new MyError("Invalid team UUID", { code: s.BAD_REQUEST });
 
-      const submissionRepository = getSubmissionRepository();
-      return await submissionRepository.find({
-        where: { userId },
-        relations: ['task'],
-        order: { timestamp: 'DESC' }
+      const submission_repo = getSubmissionRepository();
+      return await submission_repo.find({
+        where: { team_uuid },
+        relations,
+        order: { timestamp: 'DESC' },
       });
     } catch (error) {
-      logger.error(`Failed to get submissions for user ${userId}:`, error);
+      logger.error(`Failed to get submissions for team ${team_uuid}:`, error);
       throw error;
     }
   }
 
   /**
-   * Clears the rate limit map (useful for testing or resetting).
+   * Get a specific submission by UUID.
    */
-  static clearRateLimit(): void {
-    SubmissionService.rateLimitMap.clear();
+  static async get(submission_uuid: string, relations: SubmissionRelation[] = []): Promise<Submission | null> {
+    try {
+      if (!ValidationUtil.isValidUuid(submission_uuid)) throw new MyError("Invalid submission UUID", { code: s.BAD_REQUEST });
+
+      const submission_repo = getSubmissionRepository();
+      return await submission_repo.findOne({ where: { uuid: submission_uuid }, relations });
+    } catch (error) {
+      logger.error(`Failed to get submission ${submission_uuid}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a submission by UUID.
+   */
+  static async delete(submission_uuid: string | Submission): Promise<void> {
+    try {
+      if (typeof submission_uuid == "string" && !ValidationUtil.isValidUuid(submission_uuid)) throw new MyError("Invalid submission UUID", { code: s.BAD_REQUEST });
+
+      const submission_repo = getSubmissionRepository();
+      const submission = typeof submission_uuid == "string" ? (await submission_repo.findOne({ where: { uuid: submission_uuid } })) : submission_uuid;
+      if (!submission) throw new MyError("Submission not found", { code: s.NOT_FOUND });
+
+      await submission_repo.remove(submission);
+      logger.info(`Submission ${submission.uuid} deleted`);
+    } catch (error) {
+      logger.error(`Failed to delete submission ${typeof submission_uuid == "string" ? submission_uuid : submission_uuid?.uuid}:`, error);
+      throw error;
+    }
   }
 }
 
+export { SubmissionService };
 export default SubmissionService;

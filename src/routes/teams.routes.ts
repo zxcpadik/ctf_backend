@@ -4,21 +4,13 @@ import AuthMiddleware from '../middleware/auth.middleware';
 
 const router: Router = Router();
 
-// My Team
-router.get('/me', AuthMiddleware.authenticate, AuthMiddleware.ensureAccountFinalized, AuthMiddleware.hasTeam, TeamController.getMyTeam);
-router.get('/me/score', AuthMiddleware.authenticate, AuthMiddleware.ensureAccountFinalized, AuthMiddleware.hasTeam, TeamController.getMyTeamScore);
-router.get('/me/solves', AuthMiddleware.authenticate, AuthMiddleware.ensureAccountFinalized, TeamController.getMyTeamSolves);
-router.get('/me/statistics', AuthMiddleware.authenticate, AuthMiddleware.ensureAccountFinalized, TeamController.getMyTeamStatistics);
+const { authenticate, ensure_setup_done, ensure_leader, ensure_team } = AuthMiddleware;
 
-// Team Members
-router.get('/me/members', AuthMiddleware.authenticate, AuthMiddleware.ensureAccountFinalized, TeamController.getTeamMembers);
-router.delete('/me/members/:userId', AuthMiddleware.authenticate, AuthMiddleware.ensureLeader, TeamController.removeMember);
-
-// Team Codes (Leader only)
-router.post('/me/codes/member', AuthMiddleware.authenticate, AuthMiddleware.ensureLeader, TeamController.generateMemberCode);
-
-// Team Management
-router.patch('/me/name', AuthMiddleware.authenticate, AuthMiddleware.ensureLeader, TeamController.updateTeamName);
-// router.delete('/me', AuthMiddleware.authenticate, AuthMiddleware.ensureLeader, TeamController.disbandTeam);
+// All team routes require a complete account and team membership
+router.get('/me',                       authenticate, ensure_setup_done, ensure_team,                  TeamController.get_my_team);
+router.get('/me/members',               authenticate, ensure_setup_done, ensure_team,                  TeamController.get_members);
+router.delete('/me/members/:user_uuid', authenticate, ensure_setup_done, ensure_team, ensure_leader,   TeamController.remove_member);
+router.post('/me/invite',               authenticate, ensure_setup_done, ensure_team, ensure_leader,   TeamController.generate_invite);
+router.patch('/me/name',                authenticate, ensure_setup_done, ensure_team, ensure_leader,   TeamController.update_name);
 
 export default router;

@@ -1,348 +1,172 @@
 import { Request, Response } from 'express';
-import { getTeamRepository, getUserRepository, getSubmissionRepository } from '../services/database.service';
-import logger from '../services/logger.service';
-import { ResponseInterface } from '../interfaces/response.interface';
 import AuthService from '../services/auth.service';
 import TeamService from '../services/team.service';
 import UserService from '../services/user.service';
+import SubmissionService from '../services/submission.service';
+import TaskService from '../services/task.service';
+import logger from '../services/logger.service';
+import MyError from '../utils/myerror.util';
+import s from "http-status";
 
 class AdminController {
-  static async deleteAllTeams(req: Request, res: Response): Promise<void> {
+  // ─── Statistics ──────────────────────────────────────────────────────────────
+
+  /**
+   * GET /admin/statistics
+   * Overall platform counts.
+   */
+  static async get_statistics(req: Request, res: Response): Promise<void> {
     try {
-      const teamRepository = getTeamRepository();
-      const userRepository = getUserRepository();
-      const submissionRepository = getSubmissionRepository();
+      const [teams, users, submissions, tasks] = await Promise.all([
+        TeamService.get_all(),
+        UserService.get_all(),
+        SubmissionService.get_all(),
+        TaskService.get_all(),
+      ]);
 
-      // Remove all submissions
-      await submissionRepository.clear();
-
-      // Remove all users (except admins) and their associations
-      await userRepository
-        .createQueryBuilder()
-        .delete()
-        .where("isAdmin = :isAdmin", { isAdmin: false })
-        .execute();
-
-      // Remove all teams
-      await teamRepository.clear();
-
-      const response: ResponseInterface = {
+      return (res.status(s.OK).json({
         success: true,
-        message: "All teams, non-admin users, and submissions removed successfully"
-      };
-
-      res.status(200).json(response);
-    } catch (error: any) {
-      logger.error("Remove all teams error:", error);
-
-      const response: ResponseInterface = {
-        success: false,
-        message: error.message || "Failed to remove all teams"
-      };
-
-      res.status(500).json(response);
-    }
-  }
-
-  static async getAdminStats(req: Request, res: Response): Promise<void> {
-    try {
-      const userRepository = getUserRepository();
-      const teamRepository = getTeamRepository();
-      const submissionRepository = getSubmissionRepository();
-
-      const totalUsers = await userRepository.count({ where: { isAdmin: false } });
-      const totalTeams = await teamRepository.count();
-      const totalSubmissions = await submissionRepository.count();
-      const correctSubmissions = await submissionRepository.count({ where: { isCorrect: true } });
-
-      const response: ResponseInterface = {
-        success: true,
-        message: "Admin stats retrieved successfully",
         data: {
-          totalUsers,
-          totalTeams,
-          totalSubmissions,
-          correctSubmissions
-        }
-      };
-
-      res.status(200).json(response);
+          teams:       teams.length,
+          users:       users.length,
+          leaders:     users.filter(u => u.is_leader).length,
+          solves:      submissions.length,
+          tasks:       tasks.length,
+          tasks_active: tasks.filter(t => t.is_active).length,
+        },
+      }), void 0);
     } catch (error: any) {
-      logger.error("Get admin stats error:", error);
-
-      const response: ResponseInterface = {
-        success: false,
-        message: error.message || "Failed to retrieve admin stats"
-      };
-
-      res.status(500).json(response);
+      logger.error("Get admin statistics error:", error);
+      return (res.status(error instanceof MyError ? (error.code || 500) : s.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message }), void 0);
     }
   }
 
-  static async generateTeamLeaderCode(req: Request, res: Response): Promise<void> {
+  // ─── Team management ─────────────────────────────────────────────────────────
+
+  /**
+   * GET /admin/teams
+   * All teams with their members.
+   */
+  static async get_all_teams(req: Request, res: Response): Promise<void> {
     try {
-      const result = await AuthService.generateTeamLeaderAuthCode();
-
-      const response: ResponseInterface = {
-        success: true,
-        message: "Team leader auth code generated",
-        data: result
-      };
-
-      res.status(200).json(response);
+      const teams = await TeamService.get_all(['users', 'submissions']);
+      return (res.status(s.OK).json({ success: true, data: teams }), void 0);
     } catch (error: any) {
-      logger.error("Generate team leader code error:", error);
-
-      const response: ResponseInterface = {
-        success: false,
-        message: error.message || "Failed to generate team leader code"
-      };
-
-      res.status(500).json(response);
-    }
-  }
-
-  static async getAllTeams(req: Request, res: Response): Promise<void> {
-    try {
-      if (!req.isAdmin) {
-        const response: ResponseInterface = {
-          success: false,
-          message: "Admin privileges required"
-        };
-        res.status(403).json(response);
-        return;
-      }
-
-      const teams = await TeamService.getAllTeams();
-
-      const response: ResponseInterface = {
-        success: true,
-        message: "Teams with relations retrieved successfully",
-        data: teams
-      };
-
-      res.status(200).json(response);
-    } catch (error: any) {
-      logger.error("Get all teams with relations error:", error);
-
-      const response: ResponseInterface = {
-        success: false,
-        message: error.message || "Failed to retrieve teams"
-      };
-
-      res.status(500).json(response);
-    }
-  }
-
-  static async getTeamById(req: Request, res: Response): Promise<void> {
-    try {
-      if (!req.isAdmin) {
-        const response: ResponseInterface = {
-          success: false,
-          message: "Admin privileges required"
-        };
-        res.status(403).json(response);
-        return;
-      }
-
-      const { teamId } = req.params;
-
-      if (typeof teamId != 'string') {
-        const response: ResponseInterface = {
-          success: false,
-          message: "Bad request"
-        };
-        res.status(400).json(response);
-        return;
-      }
-
-      const team = await TeamService.getTeam(teamId);
-
-      if (!team) {
-        const response: ResponseInterface = {
-          success: false,
-          message: "Team not found"
-        };
-        res.status(404).json(response);
-        return;
-      }
-
-      const response: ResponseInterface = {
-        success: true,
-        message: "Team with relations retrieved successfully",
-        data: team
-      };
-
-      res.status(200).json(response);
-    } catch (error: any) {
-      logger.error("Get team with relations error:", error);
-
-      const response: ResponseInterface = {
-        success: false,
-        message: error.message || "Failed to retrieve team"
-      };
-
-      res.status(500).json(response);
-    }
-  }
-
-  static async getTeamStatistics(req: Request, res: Response): Promise<void> {
-    try {
-      if (!req.isAdmin) {
-        const response: ResponseInterface = {
-          success: false,
-          message: "Admin privileges required"
-        };
-        res.status(403).json(response);
-        return;
-      }
-
-      const { teamId } = req.params;
-
-      if (typeof teamId != 'string') {
-        const response: ResponseInterface = {
-          success: false,
-          message: "Bad request"
-        };
-        res.status(400).json(response);
-        return;
-      }
-
-      const statistics = await TeamService.getTeamStatistics(teamId);
-
-      const response: ResponseInterface = {
-        success: true,
-        message: "Team statistics retrieved successfully",
-        data: statistics
-      };
-
-      res.status(200).json(response);
-    } catch (error: any) {
-      logger.error("Get team statistics error:", error);
-
-      const response: ResponseInterface = {
-        success: false,
-        message: error.message || "Failed to retrieve team statistics"
-      };
-
-      res.status(500).json(response);
+      logger.error("Get all teams error:", error);
+      return (res.status(error instanceof MyError ? (error.code || 500) : s.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message }), void 0);
     }
   }
 
   /**
-   * Get all users (Admin only)
+   * GET /admin/teams/:team_uuid
+   * Single team with members and submissions.
    */
-  static async getAllUsers(req: Request, res: Response): Promise<void> {
+  static async get_team(req: Request, res: Response): Promise<void> {
     try {
-      if (!req.isAdmin) {
-        const response: ResponseInterface = {
-          success: false,
-          message: "Admin privileges required"
-        };
-        res.status(403).json(response);
-        return;
-      }
+      const team = await TeamService.get(req.params.team_uuid as string, ['users', 'submissions']);
+      if (!team) return (res.status(s.NOT_FOUND).json({ success: false, message: "Team not found" }), void 0);
 
-      const users = await UserService.getAllUsers();
-
-      const response: ResponseInterface = {
+      const solves = await SubmissionService.get_all_team(team.uuid, ['task']);
+      return (res.status(s.OK).json({
         success: true,
-        message: "Users retrieved successfully",
-        data: users
-      };
+        data: {
+          ...team,
+          solves_count: solves.length,
+          solves,
+        },
+      }), void 0);
+    } catch (error: any) {
+      logger.error("Get team error:", error);
+      return (res.status(error instanceof MyError ? (error.code || 500) : s.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message }), void 0);
+    }
+  }
 
-      res.status(200).json(response);
+  /**
+   * DELETE /admin/teams/:team_uuid
+   * Delete a single team and all its members.
+   */
+  static async delete_team(req: Request, res: Response): Promise<void> {
+    try {
+      await TeamService.delete(req.params.team_uuid as string);
+      return (res.status(s.OK).json({ success: true, message: "Team deleted successfully" }), void 0);
+    } catch (error: any) {
+      logger.error("Delete team error:", error);
+      return (res.status(error instanceof MyError ? (error.code || 500) : s.BAD_REQUEST).json({ success: false, message: error.message }), void 0);
+    }
+  }
+
+  /**
+   * DELETE /admin/teams
+   * Delete ALL teams and their members.
+   * Requires body: { confirm: "DELETE_ALL_TEAMS" } as a deliberate safety gate.
+   */
+  static async delete_all_teams(req: Request, res: Response): Promise<void> {
+    try {
+      if (req.body?.confirm !== "DELETE_ALL_TEAMS")
+        return (res.status(s.BAD_REQUEST).json({
+          success: false,
+          message: 'Send { "confirm": "DELETE_ALL_TEAMS" } in the request body to proceed',
+        }), void 0);
+
+      const teams = await TeamService.get_all();
+      await Promise.all(teams.map(t => TeamService.delete(t)));
+      logger.warn(`All ${teams.length} teams deleted by admin ${req.user!.uuid}`);
+      return (res.status(s.OK).json({ success: true, message: `${teams.length} team(s) deleted` }), void 0);
+    } catch (error: any) {
+      logger.error("Delete all teams error:", error);
+      return (res.status(error instanceof MyError ? (error.code || 500) : s.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message }), void 0);
+    }
+  }
+
+  // ─── User management ─────────────────────────────────────────────────────────
+
+  /**
+   * GET /admin/users
+   * All users with their team relation.
+   */
+  static async get_all_users(req: Request, res: Response): Promise<void> {
+    try {
+      const users = await UserService.get_all(['team']);
+      return (res.status(s.OK).json({ success: true, data: users }), void 0);
     } catch (error: any) {
       logger.error("Get all users error:", error);
-
-      const response: ResponseInterface = {
-        success: false,
-        message: error.message || "Failed to retrieve users"
-      };
-
-      res.status(500).json(response);
+      return (res.status(error instanceof MyError ? (error.code || 500) : s.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message }), void 0);
     }
   }
 
   /**
-   * Delete a user (Admin only)
+   * DELETE /admin/users/:user_uuid
+   * Delete a single user. Strategy 'ignore' — team is preserved.
    */
-  static async deleteUser(req: Request, res: Response): Promise<void> {
+  static async delete_user(req: Request, res: Response): Promise<void> {
     try {
-      if (!req.isAdmin) {
-        const response: ResponseInterface = {
-          success: false,
-          message: "Admin privileges required"
-        };
-        res.status(403).json(response);
-        return;
-      }
+      if (req.params.user_uuid === req.user!.uuid)
+        return (res.status(s.BAD_REQUEST).json({ success: false, message: "You cannot delete yourself" }), void 0);
 
-      const { userId } = req.params;
-
-      if (typeof userId != 'string') {
-        const response: ResponseInterface = {
-          success: false,
-          message: "Bad request"
-        };
-        res.status(400).json(response);
-        return;
-      }
-
-      await UserService.deleteUser(userId);
-
-      const response: ResponseInterface = {
-        success: true,
-        message: "User deleted successfully"
-      };
-
-      res.status(200).json(response);
+      await UserService.delete(req.params.user_uuid, 'ignore');
+      return (res.status(s.OK).json({ success: true, message: "User deleted successfully" }), void 0);
     } catch (error: any) {
       logger.error("Delete user error:", error);
-
-      const response: ResponseInterface = {
-        success: false,
-        message: error.message || "Failed to delete user"
-      };
-
-      res.status(400).json(response);
+      return (res.status(error instanceof MyError ? (error.code || 500) : s.BAD_REQUEST).json({ success: false, message: error.message }), void 0);
     }
   }
 
+  // ─── Code generation ─────────────────────────────────────────────────────────
+
   /**
-   * Get user statistics (Admin only)
+   * POST /admin/codes/team-leader
+   * Generate a one-time auth code for a new team leader.
    */
-  static async getUserStatistics(req: Request, res: Response): Promise<void> {
+  static async generate_leader_code(req: Request, res: Response): Promise<void> {
     try {
-      if (!req.isAdmin) {
-        const response: ResponseInterface = {
-          success: false,
-          message: "Admin privileges required"
-        };
-        res.status(403).json(response);
-        return;
-      }
-
-      const statistics = await UserService.getUserStatistics();
-
-      const response: ResponseInterface = {
-        success: true,
-        message: "User statistics retrieved successfully",
-        data: statistics
-      };
-
-      res.status(200).json(response);
+      const result = await AuthService.generate_auth_code();
+      return (res.status(s.CREATED).json({ success: true, data: result }), void 0);
     } catch (error: any) {
-      logger.error("Get user statistics error:", error);
-
-      const response: ResponseInterface = {
-        success: false,
-        message: error.message || "Failed to retrieve user statistics"
-      };
-
-      res.status(500).json(response);
+      logger.error("Generate leader code error:", error);
+      return (res.status(error instanceof MyError ? (error.code || 500) : s.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message }), void 0);
     }
   }
 }
 
+export { AdminController };
 export default AdminController;

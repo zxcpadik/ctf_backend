@@ -4,21 +4,22 @@ import AuthMiddleware from '../middleware/auth.middleware';
 
 const router: Router = Router();
 
+const { authenticate, ensure_admin } = AuthMiddleware;
+
 // Statistics
-router.get('/statistics', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, AdminController.getAdminStats);
+router.get('/statistics',             authenticate, ensure_admin,   AdminController.get_statistics);
 
-// Team Management
-router.get('/teams', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, AdminController.getAllTeams);
-router.get('/teams/:teamId', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, AdminController.getTeamById);
-router.get('/teams/:teamId/statistics', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, AdminController.getTeamStatistics);
-router.delete('/teams', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, AdminController.deleteAllTeams);
+// Team management
+router.get('/teams',                  authenticate, ensure_admin,   AdminController.get_all_teams);
+router.get('/teams/:team_uuid',       authenticate, ensure_admin,   AdminController.get_team);
+router.delete('/teams/:team_uuid',    authenticate, ensure_admin,   AdminController.delete_team);
+router.delete('/teams',               authenticate, ensure_admin,   AdminController.delete_all_teams);
 
-// User Management
-router.get('/users', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, AdminController.getAllUsers);
-router.get('/users/statistics', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, AdminController.getUserStatistics);
-router.delete('/users/:userId', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, AdminController.deleteUser);
+// User management
+router.get('/users',                  authenticate, ensure_admin,   AdminController.get_all_users);
+router.delete('/users/:user_uuid',    authenticate, ensure_admin,   AdminController.delete_user);
 
-// Code Generation
-router.post('/codes/team-leader', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, AdminController.generateTeamLeaderCode);
+// Code generation
+router.post('/codes/team-leader',     authenticate, ensure_admin,   AdminController.generate_leader_code);
 
 export default router;

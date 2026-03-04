@@ -1,382 +1,130 @@
 import { Request, Response } from 'express';
-import UserService from '../services/user.service';
 import AuthService from '../services/auth.service';
 import TeamService from '../services/team.service';
-import TaskService from '../services/task.service';
+import UserService from '../services/user.service';
+import ConfigService from '../services/config.service';
 import logger from '../services/logger.service';
-import { ResponseInterface } from '../interfaces/response.interface';
+import MyError from '../utils/myerror.util';
+import { get_game_state } from '../middleware/game.middleware';
+import s from "http-status";
+
+// Config keys for game-time permission flags
+const CFG_ALLOW_INVITES_DURING_GAME         = 'allow_invites_during_game';
+const CFG_ALLOW_TEAM_NAME_DURING_GAME       = 'allow_team_name_change_during_game';
+const CFG_ALLOW_MEMBER_DELETION_DURING_GAME = 'allow_member_deletion_during_game';
+
+/** Returns true when the game is in an "active" state (running or paused). */
+async function is_game_active(): Promise<boolean> {
+  const state = await get_game_state();
+  return state === 'running' || state === 'paused';
+}
+
+/** Returns true when a boolean config flag is explicitly set to 'true'. */
+async function flag_enabled(config_name: string): Promise<boolean> {
+  return (await ConfigService.get_value(config_name)) === 'true';
+}
 
 class TeamController {
   /**
-   * Get current user's team
+   * GET /teams/me
+   * Current user's full team with members.
    */
-  static async getMyTeam(req: Request, res: Response): Promise<void> {
+  static async get_my_team(req: Request, res: Response): Promise<void> {
     try {
-      if (!req.user?.teamId) {
-        const response: ResponseInterface = {
-          success: false,
-          message: "User is not part of a team"
-        };
-        res.status(404).json(response);
-        return;
-      }
-
-      const team = await TeamService.getTeamExById(req.user.teamId);
-
-      const response: ResponseInterface = {
-        success: true,
-        message: "Team retrieved successfully",
-        data: team
-      };
-
-      res.status(200).json(response);
+      const team = await TeamService.get(req.team_uuid!, ['users']);
+      if (!team) return (res.status(s.NOT_FOUND).json({ success: false, message: "Team not found" }), void 0);
+      return (res.status(s.OK).json({ success: true, data: team }), void 0);
     } catch (error: any) {
-      logger.error("Get team error:", error);
-
-      const response: ResponseInterface = {
-        success: false,
-        message: error.message || "Failed to retrieve team"
-      };
-
-      res.status(500).json(response);
+      logger.error("Get my team error:", error);
+      return (res.status(error instanceof MyError ? (error.code || 500) : s.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message }), void 0);
     }
   }
 
   /**
-   * Get current user's team score
+   * GET /teams/me/members
+   * List all members of the current user's team.
    */
-  static async getMyTeamScore(req: Request, res: Response): Promise<void> {
+  static async get_members(req: Request, res: Response): Promise<void> {
     try {
-      if (!req.user?.teamId) {
-        const response: ResponseInterface = {
-          success: false,
-          message: "User is not part of a team"
-        };
-        res.status(404).json(response);
-        return;
-      }
-
-      const score = await TeamService.getTeamScoreById(req.user.teamId);
-
-      const response: ResponseInterface = {
-        success: true,
-        message: "Team score retrieved successfully",
-        data: { score }
-      };
-
-      res.status(200).json(response);
-    } catch (error: any) {
-      logger.error("Get team score error:", error);
-
-      const response: ResponseInterface = {
-        success: false,
-        message: error.message || "Failed to retrieve team score"
-      };
-
-      res.status(500).json(response);
-    }
-  }
-
-  /**
-   * Get current user's team solves
-   */
-  static async getMyTeamSolves(req: Request, res: Response): Promise<void> {
-    try {
-      if (!req.user?.teamId) {
-        const response: ResponseInterface = {
-          success: false,
-          message: "User is not part of a team"
-        };
-        res.status(404).json(response);
-        return;
-      }
-
-      const solvedTasks = await TaskService.getSolvedTasks(req.user.teamId);
-
-      const response: ResponseInterface = {
-        success: true,
-        message: "Team solves retrieved successfully",
-        data: solvedTasks
-      };
-
-      res.status(200).json(response);
-    } catch (error: any) {
-      logger.error("Get team solves error:", error);
-
-      const response: ResponseInterface = {
-        success: false,
-        message: error.message || "Failed to retrieve team solves"
-      };
-
-      res.status(500).json(response);
-    }
-  }
-
-  /**
-   * Get current user's team statistics
-   */
-  static async getMyTeamStatistics(req: Request, res: Response): Promise<void> {
-    try {
-      if (!req.user?.teamId) {
-        const response: ResponseInterface = {
-          success: false,
-          message: "User is not part of a team"
-        };
-        res.status(404).json(response);
-        return;
-      }
-
-      const statistics = await TeamService.getTeamStatistics(req.user.teamId);
-
-      const response: ResponseInterface = {
-        success: true,
-        message: "Team statistics retrieved successfully",
-        data: statistics
-      };
-
-      res.status(200).json(response);
-    } catch (error: any) {
-      logger.error("Get team statistics error:", error);
-
-      const response: ResponseInterface = {
-        success: false,
-        message: error.message || "Failed to retrieve team statistics"
-      };
-
-      res.status(500).json(response);
-    }
-  }
-
-  /**
-   * Get team members
-   */
-  static async getTeamMembers(req: Request, res: Response): Promise<void> {
-    try {
-      if (!req.user?.teamId) {
-        const response: ResponseInterface = {
-          success: false,
-          message: "User is not part of a team"
-        };
-        res.status(404).json(response);
-        return;
-      }
-
-      const members = await TeamService.getTeamMembers(req.user.teamId);
-
-      const response: ResponseInterface = {
-        success: true,
-        message: "Team members retrieved successfully",
-        data: members
-      };
-
-      res.status(200).json(response);
+      const team = await TeamService.get(req.team_uuid!, ['users']);
+      if (!team) return (res.status(s.NOT_FOUND).json({ success: false, message: "Team not found" }), void 0);
+      return (res.status(s.OK).json({ success: true, data: team.users }), void 0);
     } catch (error: any) {
       logger.error("Get team members error:", error);
-
-      const response: ResponseInterface = {
-        success: false,
-        message: error.message || "Failed to retrieve team members"
-      };
-
-      res.status(500).json(response);
+      return (res.status(error instanceof MyError ? (error.code || 500) : s.INTERNAL_SERVER_ERROR).json({ success: false, message: error.message }), void 0);
     }
   }
 
   /**
-   * Remove team member (Leader only)
+   * DELETE /teams/me/members/:user_uuid
+   * Leader only — remove a member from the team.
+   * Allowed when state is idle or scheduled.
+   * Allowed during running/paused only if config 'allow_member_deletion_during_game' = true.
    */
-  static async removeMember(req: Request, res: Response): Promise<void> {
+  static async remove_member(req: Request, res: Response): Promise<void> {
     try {
-      const { userId } = req.params;
+      const { user_uuid } = req.params;
 
-      if (!req.user?.teamId) {
-        const response: ResponseInterface = {
-          success: false,
-          message: "User is not part of a team"
-        };
-        res.status(404).json(response);
-        return;
-      }
+      if (user_uuid === req.user!.uuid) return (res.status(s.BAD_REQUEST).json({ success: false, message: "You cannot remove yourself" }), void 0);
 
-      if (typeof userId != 'string') {
-        const response: ResponseInterface = {
-          success: false,
-          message: "Bad request"
-        };
-        res.status(400).json(response);
-        return;
-      }
+      // Game state gate
+      const game_active = await is_game_active();
+      if (game_active && !await flag_enabled(CFG_ALLOW_MEMBER_DELETION_DURING_GAME)) return (res.status(s.FORBIDDEN).json({ success: false, message: "Member removal is disabled while the game is active" }), void 0);
 
-      await TeamService.removeMember(req.user.teamId, userId);
+      const state = await get_game_state();
+      if (state === 'ended') return (res.status(s.FORBIDDEN).json({ success: false, message: "Member removal is not allowed after the game has ended" }), void 0);
 
-      const response: ResponseInterface = {
-        success: true,
-        message: "Team member removed successfully"
-      };
+      // Verify the target user actually belongs to the leader's team
+      const target = await UserService.get(user_uuid as string);
+      if (!target) return (res.status(s.NOT_FOUND).json({ success: false, message: "User not found" }), void 0);
+      if (target.team_uuid !== req.team_uuid) return (res.status(s.FORBIDDEN).json({ success: false, message: "User is not a member of your team" }), void 0);
 
-      res.status(200).json(response);
+      await UserService.delete(user_uuid, 'ignore');
+      return (res.status(s.OK).json({ success: true, message: "Member removed successfully" }), void 0);
     } catch (error: any) {
       logger.error("Remove team member error:", error);
-
-      const response: ResponseInterface = {
-        success: false,
-        message: error.message || "Failed to remove team member"
-      };
-
-      res.status(400).json(response);
+      return (res.status(error instanceof MyError ? (error.code || 500) : s.BAD_REQUEST).json({ success: false, message: error.message }), void 0);
     }
   }
 
   /**
-   * Generate member invitation code (Leader only)
+   * POST /teams/me/invite
+   * Leader only — regenerate the team invite code.
+   * Blocked during running/paused unless 'allow_invites_during_game' = true.
    */
-  static async generateMemberCode(req: Request, res: Response): Promise<void> {
+  static async generate_invite(req: Request, res: Response): Promise<void> {
     try {
-      if (!req.user) {
-        const response: ResponseInterface = {
-          success: false,
-          message: "Authentication required"
-        };
-        res.status(401).json(response);
-        return;
-      }
+      const game_active = await is_game_active();
+      if (game_active && !await flag_enabled(CFG_ALLOW_INVITES_DURING_GAME))
+        return (res.status(s.FORBIDDEN).json({ success: false, message: "Team invites are disabled while the game is active" }), void 0);
 
-      const shareCode = await AuthService.requestShareCode(req.user);
-
-      const response: ResponseInterface = {
-        success: true,
-        message: "Member invitation code generated successfully",
-        data: { shareCode }
-      };
-
-      res.status(200).json(response);
+      const code = await AuthService.generate_share_code(req.user!);
+      return (res.status(s.OK).json({ success: true, data: { invite_code: code } }), void 0);
     } catch (error: any) {
-      logger.error("Generate member code error:", error);
-
-      const response: ResponseInterface = {
-        success: false,
-        message: error.message || "Failed to generate member code"
-      };
-
-      res.status(400).json(response);
+      logger.error("Generate invite code error:", error);
+      return (res.status(error instanceof MyError ? (error.code || 500) : s.BAD_REQUEST).json({ success: false, message: error.message }), void 0);
     }
   }
 
   /**
-   * Update team name (Leader only)
+   * PATCH /teams/me/name
+   * Leader only — rename the team.
+   * Blocked during running/paused unless 'allow_team_name_change_during_game' = true.
    */
-  static async updateTeamName(req: Request, res: Response): Promise<void> {
+  static async update_name(req: Request, res: Response): Promise<void> {
     try {
-      const { teamName } = req.body;
+      const game_active = await is_game_active();
+      if (game_active && !await flag_enabled(CFG_ALLOW_TEAM_NAME_DURING_GAME))
+        return (res.status(s.FORBIDDEN).json({ success: false, message: "Team name changes are disabled while the game is active" }), void 0);
 
-      if (!req.user?.teamId) {
-        const response: ResponseInterface = {
-          success: false,
-          message: "User is not part of a team"
-        };
-        res.status(404).json(response);
-        return;
-      }
-
-      if (!teamName || teamName.trim().length < 2) {
-        const response: ResponseInterface = {
-          success: false,
-          message: "Team name must be at least 2 characters long"
-        };
-        res.status(400).json(response);
-        return;
-      }
-
-      const updatedTeam = await TeamService.updateTeamName(req.user.teamId, teamName.trim());
-
-      const response: ResponseInterface = {
-        success: true,
-        message: "Team name updated successfully",
-        data: updatedTeam
-      };
-
-      res.status(200).json(response);
+      const team = await TeamService.update_name(req.team_uuid!, req.body.team_name);
+      return (res.status(s.OK).json({ success: true, message: "Team name updated successfully", data: team }), void 0);
     } catch (error: any) {
       logger.error("Update team name error:", error);
-
-      const response: ResponseInterface = {
-        success: false,
-        message: error.message || "Failed to update team name"
-      };
-
-      res.status(400).json(response);
-    }
-  }
-
-  /**
-   * Get teammates (for leader)
-   */
-  static async getTeammates(req: Request, res: Response): Promise<void> {
-    try {
-      if (!req.user || !req.user.isLeader || !req.user.teamId) {
-        const response: ResponseInterface = {
-          success: false,
-          message: "Team leader privileges required"
-        };
-        res.status(403).json(response);
-        return;
-      }
-
-      const teammates = await UserService.getTeammates(req.user.teamId);
-
-      const response: ResponseInterface = {
-        success: true,
-        message: "Teammates retrieved successfully",
-        data: teammates
-      };
-
-      res.status(200).json(response);
-    } catch (error: any) {
-      logger.error("Get teammates error:", error);
-
-      const response: ResponseInterface = {
-        success: false,
-        message: error.message || "Failed to retrieve teammates"
-      };
-
-      res.status(500).json(response);
-    }
-  }
-
-  /**
-   * Generate share code (for leader)
-   */
-  static async generateShareCode(req: Request, res: Response): Promise<void> {
-    try {
-      if (!req.user || !req.user.isLeader || !req.user.name) {
-        const response: ResponseInterface = {
-          success: false,
-          message: "Only finalized team leaders can generate share codes"
-        };
-        res.status(403).json(response);
-        return;
-      }
-
-      const shareCode = await AuthService.requestShareCode(req.user);
-
-      const response: ResponseInterface = {
-        success: true,
-        message: "Share code generated successfully",
-        data: { shareCode }
-      };
-
-      res.status(200).json(response);
-    } catch (error: any) {
-      logger.error("Generate share code error:", error);
-
-      const response: ResponseInterface = {
-        success: false,
-        message: error.message || "Failed to generate share code"
-      };
-
-      res.status(400).json(response);
+      return (res.status(error instanceof MyError ? (error.code || 500) : s.BAD_REQUEST).json({ success: false, message: error.message }), void 0);
     }
   }
 }
 
+export { TeamController };
 export default TeamController;

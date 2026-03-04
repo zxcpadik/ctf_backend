@@ -13,37 +13,25 @@ export class Submission extends BaseEntity {
   uuid: string;
 
   @ManyToOne(() => User, user => user.submissions, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: "userId" })
+  @JoinColumn({ name: "user_uuid" })
   user: User;
 
   @Column()
-  userId: string; // Foreign key to User
+  user_uuid: string;
 
   @ManyToOne(() => Task, task => task.submissions, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: "taskId" })
+  @JoinColumn({ name: "task_uuid" })
   task: Task;
 
   @Column()
-  taskId: string; // Foreign key to Task
+  task_uuid: string;
 
   @ManyToOne(() => Team, team => team.submissions, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: "teamId" })
+  @JoinColumn({ name: "team_uuid" })
   team: Team;
 
   @Column()
-  teamId: string; // Foreign key to Team (redundant but useful for direct lookups)
-
-  @Column({ type: "text" })
-  submittedFlag: string;
-
-  @Column()
-  isCorrect: boolean;
-
-  @Column()
-  ipAddress: string;
-
-  @Column()
-  userAgent: string;
+  team_uuid: string;
 
   @CreateDateColumn()
   timestamp: Date;

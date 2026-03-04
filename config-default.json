@@ -1,0 +1,74 @@
+[
+  {
+    "name": "game_state",
+    "type": "LIST",
+    "value": null,
+    "default_value": "idle",
+    "description": "Current game state. Transitioning to 'scheduled' requires game_schedule_start to be set.",
+    "validator": "async (val) => { const opts = await this.options(); return opts.map(o => o.value).includes(val); }",
+    "options_resolver": "($) => [{ label: 'Idle', value: 'idle' }, { label: 'Scheduled', value: 'scheduled' }, { label: 'Running', value: 'running' }, { label: 'Paused', value: 'paused' }, { label: 'Ended', value: 'ended' }]"
+  },
+  {
+    "name": "game_schedule_start",
+    "type": "NUMBER",
+    "value": null,
+    "default_value": null,
+    "description": "UTC timestamp (ms) for when the game auto-starts. Required before transitioning to 'scheduled'.",
+    "validator": "(val) => val === null || (Number.isFinite(Number(val)) && Number(val) > 0)",
+    "options_resolver": null
+  },
+  {
+    "name": "tasks_visible_on_pause",
+    "type": "BOOLEAN",
+    "value": null,
+    "default_value": "false",
+    "description": "Allow players to view tasks and task groups while the game is paused.",
+    "validator": "(val) => ['true', 'false'].includes(val)",
+    "options_resolver": null
+  },
+  {
+    "name": "max_team_size",
+    "type": "NUMBER",
+    "value": null,
+    "default_value": "4",
+    "description": "Maximum number of members allowed in a single team (leader included).",
+    "validator": "(val) => !isNaN(val) && parseInt(val) > 0 && parseInt(val) <= 20",
+    "options_resolver": null
+  },
+  {
+    "name": "allow_invites_during_game",
+    "type": "BOOLEAN",
+    "value": null,
+    "default_value": "false",
+    "description": "Allow team leaders to generate invite codes while the game is running or paused.",
+    "validator": "(val) => ['true', 'false'].includes(val)",
+    "options_resolver": null
+  },
+  {
+    "name": "allow_team_name_change_during_game",
+    "type": "BOOLEAN",
+    "value": null,
+    "default_value": "false",
+    "description": "Allow team leaders to rename their team while the game is running or paused.",
+    "validator": "(val) => ['true', 'false'].includes(val)",
+    "options_resolver": null
+  },
+  {
+    "name": "allow_name_change_during_game",
+    "type": "BOOLEAN",
+    "value": null,
+    "default_value": "false",
+    "description": "Allow users to change their display name while the game is running or paused.",
+    "validator": "(val) => ['true', 'false'].includes(val)",
+    "options_resolver": null
+  },
+  {
+    "name": "allow_member_deletion_during_game",
+    "type": "BOOLEAN",
+    "value": null,
+    "default_value": "false",
+    "description": "Allow team leaders to remove members while the game is running or paused. Admins are never restricted.",
+    "validator": "(val) => ['true', 'false'].includes(val)",
+    "options_resolver": null
+  }
+]

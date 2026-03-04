@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, BaseEntity } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, BaseEntity, Index } from "typeorm";
 import { User } from "./User";
 
 /**
@@ -7,27 +7,28 @@ import { User } from "./User";
 @Entity()
 export class Session extends BaseEntity {
   @PrimaryGeneratedColumn("uuid")
-  uuid: string; // Used as the sessionId in JWT payload
+  @Index()
+  uuid: string;
 
   @ManyToOne(() => User, user => user.sessions, { onDelete: 'CASCADE' })
   @JoinColumn({ name: "userId" })
   user: User;
 
   @Column()
-  userId: string; // Foreign key to User
+  user_uuid: string;
 
   @Column()
-  userAgent: string;
+  user_agent: string;
 
   @Column({ type: "text", nullable: true })
-  jwtHash: string | null; // Hash of the JWT for revocation purposes, not the token itself
+  jwt_hash: string | null;
 
   @CreateDateColumn()
-  createdAt: Date;
+  created_at: Date;
 
   @Column({ type: "datetime" })
-  expiresAt: Date; // Session expiration time
+  expires_at: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date;
+  updated_at: Date;
 }

@@ -1,25 +1,21 @@
 import { Router } from 'express';
 import TaskController from '../controllers/task.controller';
 import AuthMiddleware from '../middleware/auth.middleware';
+import GameMiddleware from '../middleware/game.middleware';
 
 const router: Router = Router();
 
-// Task Management
-router.get('/', AuthMiddleware.authenticate, AuthMiddleware.ensureAccountFinalized, TaskController.getAllTasks);
-router.post('/', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, TaskController.createTask);
-router.get('/:taskId', AuthMiddleware.authenticate, AuthMiddleware.ensureAccountFinalized, TaskController.getTaskById);
-router.put('/:taskId', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, TaskController.updateTask);
-router.delete('/:taskId', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, TaskController.deleteTask);
+const { authenticate, ensure_setup_done, ensure_admin } = AuthMiddleware;
+const { ensure_tasks_visible, ensure_game_running }     = GameMiddleware;
 
-// Task Files
-router.get('/files/:fileId', AuthMiddleware.authenticate, AuthMiddleware.ensureAccountFinalized, TaskController.downloadTaskFile);
+// Files — declared before /:task_uuid to avoid param shadowing
+router.get('/files/:file_uuid',   authenticate, ensure_setup_done, ensure_tasks_visible,  TaskController.download_file);
 
-// Batch Operations
-router.patch('/batch/status', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, TaskController.batchUpdateTaskStatus);
-router.delete('/batch', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, TaskController.batchDeleteTasks);
-
-// Solved Tasks
-router.get('/solved/me', AuthMiddleware.authenticate, AuthMiddleware.ensureAccountFinalized, TaskController.getMySolvedTasks);
-router.get('/solved/team/:teamId', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, TaskController.getSolvedTasksByTeam);
+// CRUD
+router.get('/',                   authenticate, ensure_setup_done, ensure_tasks_visible,  TaskController.get_all);
+router.post('/',                  authenticate, ensure_admin,                             TaskController.create);
+router.get('/:task_uuid',         authenticate, ensure_setup_done, ensure_tasks_visible,  TaskController.get);
+router.put('/:task_uuid',         authenticate, ensure_admin,                             TaskController.update);
+router.delete('/:task_uuid',      authenticate, ensure_admin,                             TaskController.delete);
 
 export default router;

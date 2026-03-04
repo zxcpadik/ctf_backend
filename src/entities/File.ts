@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, BaseEntity } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, BaseEntity, Index } from "typeorm";
 import { Task } from "./Task";
 
 /**
@@ -8,6 +8,7 @@ import { Task } from "./Task";
 @Entity()
 export class File extends BaseEntity {
   @PrimaryGeneratedColumn("uuid")
+  @Index()
   uuid: string;
 
   @Column()
@@ -23,11 +24,11 @@ export class File extends BaseEntity {
   path: string;
 
   @ManyToOne(() => Task, task => task.files, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: "taskId" })
+  @JoinColumn({ name: "task_uuid" })
   task: Task;
 
   @Column()
-  task_id: string;
+  task_uuid: string;
 
   @CreateDateColumn()
   created_at: Date;

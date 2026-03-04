@@ -12,7 +12,7 @@ export class Task extends BaseEntity {
   uuid: string;
 
   @Column({ unique: true })
-  shortName: string;
+  short_name: string;
 
   @Column({ type: "text", nullable: true })
   description: string | null;
@@ -21,30 +21,34 @@ export class Task extends BaseEntity {
   score: number;
 
   @Column()
-  flag: string; // The correct flag to solve the task
+  flag: string;
 
   @Column({ default: false })
-  isActive: boolean; // Controls visibility and solvability for players
+  is_active: boolean;
+
+  @Column({ default: false })
+  is_case_sensitive: boolean;
 
   @ManyToOne(() => TaskGroup, taskGroup => taskGroup.tasks, {
     onDelete: 'SET NULL',
     nullable: true
   })
-  @JoinColumn({ name: "groupId" })
+  @JoinColumn({ name: "group_uuid" })
   group: TaskGroup | null;
 
   @Column({ nullable: true })
-  groupId: string | null; // Foreign key to TaskGroup
+  group_uuid: string | null;
 
   @OneToMany(() => File, file => file.task, { cascade: true })
-  files: File[]; // Files associated with the task
+  files: File[];
 
   @OneToMany(() => Submission, submission => submission.task)
   submissions: Submission[];
 
   @CreateDateColumn()
-  createdAt: Date;
+  created_at: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date;
+  updated_at: Date;
+
 }

@@ -1,18 +1,17 @@
 import { Router } from 'express';
-import TaskGroupController from '../controllers/task-group.controller'; // Updated import
+import TaskGroupController from '../controllers/task-group.controller';
 import AuthMiddleware from '../middleware/auth.middleware';
+import GameMiddleware from '../middleware/game.middleware';
 
 const router: Router = Router();
 
-// Task Group Management
-router.get('/', AuthMiddleware.authenticate, TaskGroupController.get_all_task_groups);
-router.post('/', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, TaskGroupController.createTaskGroup);
-router.get('/:groupId', AuthMiddleware.authenticate, TaskGroupController.getTaskGroupById);
-router.put('/:groupId', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, TaskGroupController.updateTaskGroup);
-router.delete('/:groupId', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, TaskGroupController.deleteTaskGroup);
+const { authenticate, ensure_setup_done, ensure_admin } = AuthMiddleware;
+const { ensure_tasks_visible }                          = GameMiddleware;
 
-// Batch Operations
-router.patch('/batch/status', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, TaskGroupController.batchUpdateTaskGroupStatus);
-router.delete('/batch', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, TaskGroupController.batchDeleteTaskGroups);
+router.get('/',                   authenticate, ensure_setup_done, ensure_tasks_visible,  TaskGroupController.get_all);
+router.post('/',                  authenticate, ensure_admin,                             TaskGroupController.create);
+router.get('/:group_uuid',        authenticate, ensure_setup_done, ensure_tasks_visible,  TaskGroupController.get);
+router.put('/:group_uuid',        authenticate, ensure_admin,                             TaskGroupController.update);
+router.delete('/:group_uuid',     authenticate, ensure_admin,                             TaskGroupController.delete);
 
 export default router;

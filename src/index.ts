@@ -4,11 +4,8 @@ import cors from 'cors';
 import { AppDataSource, initializeDatabase } from './services/database.service';
 import logger from './services/logger.service';
 import Environment from './config/environment';
-import GameService from './services/game.service';
-import ScheduledTasksService from './services/scheduled-tasks.service';
 import { router as apiRouter } from './routes';
 import fs from 'fs';
-import WebSocketService from './services/websocket.service';
 
 class App {
   private app: Application;
@@ -53,19 +50,10 @@ class App {
     // Initialize database
     await initializeDatabase();
 
-    // Ensure the single Game instance exists
-    await GameService.getOrCreateGame();
-
-    // Start background services (auth code cleanup, leaderboard snapshots, game state checks)
-    ScheduledTasksService.startAll();
-
     const server = this.app.listen(this.port, () => {
       logger.info(`Server is running on port ${this.port}`);
       logger.info(`Access it at: http://localhost:${this.port}`);
     });
-
-    // Initialize WebSocket server
-    WebSocketService.initialize(server);
 
     // Graceful shutdown
     process.on('SIGINT', this.gracefulShutdown.bind(this));
@@ -74,7 +62,6 @@ class App {
 
   private async gracefulShutdown(): Promise<void> {
     logger.info('Shutting down server...');
-    await ScheduledTasksService.stopAll(); // Stop all background tasks
     // Add any other cleanup logic here (e.g., close DB connections if not handled by TypeORM)
     await AppDataSource.destroy(); // Close TypeORM connection
     logger.info('Server gracefully shut down.');

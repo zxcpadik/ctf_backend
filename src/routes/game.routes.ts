@@ -4,12 +4,9 @@ import AuthMiddleware from '../middleware/auth.middleware';
 
 const router: Router = Router();
 
-// Game Status
-router.get('/status', GameController.getGameStatus);
+const { authenticate, ensure_admin } = AuthMiddleware;
 
-// Game Control (Admin only)
-router.post('/start', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, GameController.startGame);
-router.post('/stop', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, GameController.stopGame);
-router.post('/reset', AuthMiddleware.authenticate, AuthMiddleware.ensureAdmin, GameController.resetGame);
+router.get('/state',     GameController.get_state);
+router.patch('/state',   authenticate, ensure_admin,   GameController.set_state);
 
 export default router;

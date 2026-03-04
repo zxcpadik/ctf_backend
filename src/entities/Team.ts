@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, BaseEntity } from "typeorm";
 import { User } from "./User";
 import { Submission } from "./Submission";
+import TeamService from "../services/team.service";
 
 /**
  * Represents a CTF team.
@@ -23,8 +24,21 @@ export class Team extends BaseEntity {
   submissions: Submission[];
 
   @CreateDateColumn()
-  createdAt: Date;
+  created_at: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date;
+  updated_at: Date;
+
+  
+  //#region Service aliases
+
+  public delete() {
+    return TeamService.delete(this);
+  }
+
+  public update_name(team_name: string) {
+    return TeamService.update_name(this, team_name);
+  }
+
+  //#endregion
 }

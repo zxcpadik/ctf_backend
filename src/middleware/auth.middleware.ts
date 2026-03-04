@@ -1,136 +1,180 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { getSessionRepository, getUserRepository } from '../services/database.service';
+import { getSessionRepository } from '../services/database.service';
 import Environment from '../config/environment';
 import logger from '../services/logger.service';
 import { Session } from '../entities/Session';
 import { User } from '../entities/User';
 
-// Extend the Request type to include session and user information
+// ─── Setup stage ──────────────────────────────────────────────────────────────
+
+/**
+ * Ordered setup stages every user must complete before accessing the app.
+ * Stage is re-derived from the User entity on every authenticated request,
+ * so relogs never skip a stage.
+ *
+ *  password  →  All users:   must set a password
+ *  profile   →  All users:   must set a display name
+ *  team      →  Leaders only: must create a team
+ *  done      →  Setup complete, full access granted
+ */
+export type SetupStage = 'password' | 'profile' | 'team' | 'done';
+
+export function get_setup_stage(user: User): SetupStage {
+  if (!user.password_hash)                      return 'password';
+  if (!user.name)                               return 'profile';
+  if (user.is_leader && !user.team_uuid)        return 'team';
+  return 'done';
+}
+
+// ─── Request augmentation ────────────────────────────────────────────────────
+
 declare global {
   namespace Express {
     interface Request {
-      session?: Session;
-      user?: User;
-      isAdmin?: boolean;
-      isLeader?: boolean;
-      teamId?: string;
+      session?:     Session;
+      user?:        User;
+      is_admin?:    boolean;
+      is_leader?:   boolean;
+      team_uuid?:   string;
+      setup_stage?: SetupStage;
     }
   }
 }
 
-/**
- * Interface for the JWT payload.
- */
 interface JwtPayload {
-  sessionId: string;
+  session_uuid: string;
 }
 
-/**
- * Authentication middleware to verify JWT and populate req.session, req.user, and status flags.
- */
+// ─── Middleware ───────────────────────────────────────────────────────────────
+
 class AuthMiddleware {
+  /**
+   * Verify JWT, validate session, and populate req.user / req.setup_stage.
+   * Always attaches setup_stage — downstream middleware and controllers can
+   * inspect it without re-computing.
+   */
   static async authenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return AuthMiddleware.handleUnauthorized(res, "No or invalid authorization header.");
+    const auth_header = req.headers.authorization;
+    if (!auth_header?.startsWith('Bearer ')) {
+      return AuthMiddleware._unauthorized(res, "Missing or invalid authorization header");
     }
 
-    const token = authHeader.split(' ')[1];
+    const token = auth_header.split(' ')[1];
 
     try {
       const decoded = jwt.verify(token, Environment.JWT_SECRET) as JwtPayload;
-      const sessionRepository = getSessionRepository();
 
-      const session = await sessionRepository.findOne({
-        where: { uuid: decoded.sessionId },
-        relations: ['user']
+      const session_repo = getSessionRepository();
+      const session = await session_repo.findOne({
+        where: { uuid: decoded.session_uuid },
+        relations: ['user'],
       });
 
-      if (!session || session.expiresAt < new Date()) {
-        logger.warn(`Session expired or not found for sessionId: ${decoded.sessionId}`);
-        return AuthMiddleware.handleUnauthorized(res, "Session expired or invalid.");
+      if (!session || session.expires_at < new Date()) {
+        logger.warn(`Session expired or not found: ${decoded.session_uuid}`);
+        return AuthMiddleware._unauthorized(res, "Session expired or invalid");
       }
 
-      if (session.userAgent !== req.headers['user-agent']) {
-        logger.warn(`User-Agent mismatch for sessionId: ${decoded.sessionId}. Potential session hijacking.`);
-        // TODO Consider destroying this session for security
-        return AuthMiddleware.handleUnauthorized(res, "User-Agent mismatch.");
+      if (session.user_agent !== req.headers['user-agent']) {
+        logger.warn(`User-Agent mismatch for session ${decoded.session_uuid}`);
+        return AuthMiddleware._unauthorized(res, "User-Agent mismatch");
       }
 
       const user = session.user;
       if (!user) {
-        logger.error(`User not found for session ID: ${session.uuid}`);
-        return AuthMiddleware.handleUnauthorized(res, "Associated user not found.");
+        logger.error(`User missing for session ${session.uuid}`);
+        return AuthMiddleware._unauthorized(res, "Associated user not found");
       }
 
-      // Attach session and user details to the request
-      req.session = session;
-      req.user = user;
-      req.isAdmin = user.isAdmin;
-      req.isLeader = user.isLeader;
-      req.teamId = user.teamId ?? undefined;
+      req.session     = session;
+      req.user        = user;
+      req.is_admin    = user.is_admin;
+      req.is_leader   = user.is_leader;
+      req.team_uuid   = user.team_uuid ?? undefined;
+      req.setup_stage = get_setup_stage(user);
 
       next();
     } catch (error) {
       if (error instanceof jwt.JsonWebTokenError) {
-        logger.warn(`Invalid JWT token: ${error.message}`);
-        return AuthMiddleware.handleUnauthorized(res, "Invalid token.");
+        logger.warn(`Invalid JWT: ${error.message}`);
+        return AuthMiddleware._unauthorized(res, "Invalid token");
       }
-      logger.error("Authentication failed due to an unexpected error:", error);
-      res.status(500).json({ message: "Internal server error during authentication." });
+      logger.error("Unexpected authentication error:", error);
+      res.status(500).json({ message: "Internal server error during authentication" });
     }
   }
 
   /**
-   * Middleware to ensure the authenticated user is an admin.
+   * Block access until setup is fully complete.
+   * Attach this after `authenticate` on any route that requires a live account.
+   * Returns 403 with the current stage so the client knows where to resume.
    */
-  static ensureAdmin(req: Request, res: Response, next: NextFunction): void {
-    if (!req.isAdmin) {
-      return AuthMiddleware.handleForbidden(res, "Access denied. Admin privileges required.");
+  static ensure_setup_done(req: Request, res: Response, next: NextFunction): void {
+    if (req.setup_stage !== 'done') {
+      return AuthMiddleware._forbidden(res, `Account setup incomplete`, req.setup_stage);
     }
     next();
   }
 
   /**
-   * Middleware to ensure the authenticated user is a team leader.
+   * Allow access only up to and including the given stage.
+   * Used to protect setup endpoints themselves — e.g. the "set password"
+   * endpoint should only be reachable when setup_stage === 'password'.
    */
-  static ensureLeader(req: Request, res: Response, next: NextFunction): void {
-    if (!req.isLeader) {
-      return AuthMiddleware.handleForbidden(res, "Access denied. Team leader privileges required.");
+  static ensure_stage(expected: SetupStage) {
+    return (req: Request, res: Response, next: NextFunction): void => {
+      if (req.setup_stage !== expected) {
+        // If already past this stage, treat as forbidden (don't re-do)
+        // If not yet at this stage, also forbidden (wrong order)
+        return AuthMiddleware._forbidden(
+          res,
+          `This action is not available at setup stage '${req.setup_stage}'`,
+          req.setup_stage
+        );
+      }
+      next();
+    };
+  }
+
+  /**
+   * Ensure the authenticated user is an admin.
+   */
+  static ensure_admin(req: Request, res: Response, next: NextFunction): void {
+    if (!req.is_admin) {
+      return AuthMiddleware._forbidden(res, "Admin privileges required");
     }
     next();
   }
 
   /**
-   * Middleware to ensure the user's account has been finalized (team name set for leader, username for teammate).
+   * Ensure the authenticated user is a team leader.
    */
-  static ensureAccountFinalized(req: Request, res: Response, next: NextFunction): void {
-    if (!req.user?.name) {
-      return AuthMiddleware.handleForbidden(res, "Account not finalized. Please complete setup.");
-    }
-    next();
-  }
-
-  static hasTeam(req: Request, res: Response, next: NextFunction): void {
-    if (!req.user?.teamId) {
-      return AuthMiddleware.handleForbidden(res, "You don't have team");
+  static ensure_leader(req: Request, res: Response, next: NextFunction): void {
+    if (!req.is_leader) {
+      return AuthMiddleware._forbidden(res, "Team leader privileges required");
     }
     next();
   }
 
   /**
-   * Helper for unauthorized responses.
+   * Ensure the user belongs to a team.
    */
-  private static handleUnauthorized(res: Response, message: string): void {
+  static ensure_team(req: Request, res: Response, next: NextFunction): void {
+    if (!req.team_uuid) {
+      return AuthMiddleware._forbidden(res, "You must be part of a team to do this");
+    }
+    next();
+  }
+
+  // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+  private static _unauthorized(res: Response, message: string): void {
     res.status(401).json({ message });
   }
 
-  /**
-   * Helper for forbidden responses.
-   */
-  private static handleForbidden(res: Response, message: string): void {
-    res.status(403).json({ message });
+  private static _forbidden(res: Response, message: string, setup_stage?: SetupStage): void {
+    res.status(403).json({ message, ...(setup_stage ? { setup_stage } : {}) });
   }
 }
 

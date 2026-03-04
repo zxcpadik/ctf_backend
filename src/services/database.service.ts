@@ -6,15 +6,14 @@ import { Task } from "../entities/Task";
 import { File } from "../entities/File";
 import { Submission } from "../entities/Submission";
 import { Session } from "../entities/Session";
-import { Game } from "../entities/Game";
-import { LeaderboardSnapshot } from "../entities/LeaderboardSnapshot";
-import logger from "./logger.service"; // Assume logger.service.ts will be created next
+import logger from "./logger.service";
+import { Config } from "../entities/Config";
 
 export const AppDataSource = new DataSource({
   type: "sqlite",
   database: "data.db", // SQLite database file
   synchronize: true, // Automatically synchronize schema with entities (use with caution in production)
-  logging: false, // Set to 'all' for detailed SQL logging
+  logging: false,
   entities: [
     User,
     Team,
@@ -23,8 +22,7 @@ export const AppDataSource = new DataSource({
     File,
     Submission,
     Session,
-    Game,
-    LeaderboardSnapshot,
+    Config,
   ],
   subscribers: [],
   migrations: [],
@@ -41,7 +39,7 @@ export async function initializeDatabase(): Promise<void> {
   } catch (error) {
     logger.error("Database initialization failed!", error);
     console.error(error);
-    process.exit(1); // Exit process if DB connection fails
+    process.exit(1);
   }
 }
 
@@ -53,5 +51,4 @@ export const getTaskRepository = () => AppDataSource.getRepository(Task);
 export const getFileRepository = () => AppDataSource.getRepository(File);
 export const getSubmissionRepository = () => AppDataSource.getRepository(Submission);
 export const getSessionRepository = () => AppDataSource.getRepository(Session);
-export const getGameRepository = () => AppDataSource.getRepository(Game);
-export const getLeaderboardSnapshotRepository = () => AppDataSource.getRepository(LeaderboardSnapshot);
+export const getConfigRepository = () => AppDataSource.getRepository(Config);

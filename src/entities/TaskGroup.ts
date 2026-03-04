@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, BaseEntity } from "typeorm";
 import { Task } from "./Task";
+import TaskGroupService from "../services/task-group.service";
 
 /**
  * Represents a group of CTF tasks.
@@ -16,14 +17,24 @@ export class TaskGroup extends BaseEntity {
   description: string | null;
 
   @Column({ default: true })
-  isActive: boolean; // Add this field for batch operations
+  is_active: boolean;
 
   @OneToMany(() => Task, task => task.group)
   tasks: Task[];
 
   @CreateDateColumn()
-  createdAt: Date;
+  created_at: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date;
+  updated_at: Date;
+
+
+  //#region Service alias
+
+  public delete() {
+    return TaskGroupService.delete(this);
+  }
+
+  //#endregion
+
 }
