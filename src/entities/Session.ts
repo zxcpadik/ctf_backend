@@ -11,7 +11,7 @@ export class Session extends BaseEntity {
   uuid: string;
 
   @ManyToOne(() => User, user => user.sessions, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: "userId" })
+  @JoinColumn({ name: "user_uuid" })
   user: User;
 
   @Column()
@@ -26,7 +26,7 @@ export class Session extends BaseEntity {
   @CreateDateColumn()
   created_at: Date;
 
-  @Column({ type: "datetime" })
+  @Column({ type: "timestamptz" })
   expires_at: Date;
 
   @UpdateDateColumn()

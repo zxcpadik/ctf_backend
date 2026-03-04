@@ -21,9 +21,9 @@
     "jsonwebtoken": "^9.0.3",
     "mime-types": "^3.0.2",
     "multer": "^2.0.2",
+    "pg": "^8.19.0",
     "reflect-metadata": "^0.2.2",
     "speakeasy": "^2.0.0",
-    "sqlite3": "^5.1.7",
     "typeorm": "^0.3.28",
     "winston": "^3.19.0",
     "ws": "^8.19.0"

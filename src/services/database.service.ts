@@ -10,8 +10,8 @@ import logger from "./logger.service";
 import { Config } from "../entities/Config";
 
 export const AppDataSource = new DataSource({
-  type: "sqlite",
-  database: "data.db", // SQLite database file
+  type: "postgres",
+  url: process.env.DATABASE_CONNECTION,
   synchronize: true, // Automatically synchronize schema with entities (use with caution in production)
   logging: false,
   entities: [
@@ -34,6 +34,8 @@ export const AppDataSource = new DataSource({
  */
 export async function initializeDatabase(): Promise<void> {
   try {
+    if (!process.env.DATABASE_CONNECTION) throw new Error("DATABASE_CONNECTION not set in .env");
+
     await AppDataSource.initialize();
     logger.info("Database initialized successfully.");
   } catch (error) {

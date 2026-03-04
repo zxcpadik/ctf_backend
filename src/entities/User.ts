@@ -2,7 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 import { Team } from "./Team";
 import { Session } from "./Session";
 import { Submission } from "./Submission";
-import UserService, { UserRemoveStrategy } from "../services/user.service";
+import UserService, { UserDeleteStrategy } from "../services/user.service";
 
 /**
  * Represents a user in the CTF platform, which can be a team member,
@@ -56,7 +56,7 @@ export class User extends BaseEntity {
 
   //#region Service aliases
 
-  public delete(strategy: UserRemoveStrategy = "ignore") {
+  public delete(strategy: UserDeleteStrategy = "ignore") {
     return UserService.delete(this.uuid, strategy);
   }
 

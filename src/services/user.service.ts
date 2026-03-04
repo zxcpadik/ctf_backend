@@ -6,8 +6,7 @@ import MyError from '../utils/myerror.util';
 import s from "http-status";
 
 export type UserRelations = 'team' | 'sessions' | 'submissions';
-// export const UserRelations_ = ['team', 'sessions', 'submissions'];
-// TODO - add validation in contoller
+export const UserRelations_ = ['team', 'sessions', 'submissions'];
 export type UserDeleteStrategy = 'ignore' | 'reassign' | 'recursive';
 export const UserDeleteStrategy_ = ['ignore', 'reassign', 'recursive'];
 
@@ -20,8 +19,8 @@ class UserService {
     try {
       if (!ValidationUtil.isValidUuid(user_uuid)) throw new MyError("Invalid user UUID", { code: s.BAD_REQUEST });
 
-      const userRepository = getUserRepository();
-      return await userRepository.findOne({
+      const user_repo = getUserRepository();
+      return await user_repo.findOne({
         where: { uuid: user_uuid },
         relations: relations
       });
@@ -36,8 +35,8 @@ class UserService {
    */
   static async get_all(relations: UserRelations[] = []): Promise<User[]> {
     try {
-      const userRepository = getUserRepository();
-      return await userRepository.find({
+      const user_repo = getUserRepository();
+      return await user_repo.find({
         relations: relations,
         order: {
           is_admin: 'DESC',
